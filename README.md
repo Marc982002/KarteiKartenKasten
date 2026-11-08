@@ -49,6 +49,14 @@ Steht hinter einem Begriff eine Übersetzung in Klammern, reicht eins von beiden
 
 Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt die App nicht. Die Bewertung ist deshalb immer nur ein Vorschlag.
 
+## Fortschritt und Abzeichen
+
+- **Karteikasten mit Fächern** (Statistik eines Stapels): Jede Karte liegt in einem von fünf Fächern, je nachdem, wie lange sie laut Algorithmus sicher sitzt (unter 1 Tag bis über 3 Monate). Gewusste Karten rücken weiter, vergessene fallen zurück.
+- **Fortschritt pro Stapel** mit den Stufen Bronze (25 %), Silber (50 %) und Gold (75 %).
+- **16 Abzeichen** für Regelmäßigkeit und Meilensteine, z. B. Serien, Antworten insgesamt, „Alles erledigt“ oder die erste Karte in Fach 5.
+
+Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges Behalten. Es gibt keine Punkte für „richtige“ Bewertungen, weil das dazu verleiten würde, Karten besser zu bewerten, als sie liefen. Der Algorithmus würde dann zu lange Abstände planen.
+
 ## Wo die Daten liegen
 
 Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.db` (SQLite). Zum Sichern den ganzen Ordner `data/` kopieren, am besten bei beendetem Server.
