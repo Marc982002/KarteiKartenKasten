@@ -6,32 +6,47 @@
 <title>Karteikasten</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Caveat:wght@500;700&family=Kalam:wght@400;700&display=swap">
 <style>
-/* Layout: one calm column; only the study card gets the paper index-card treatment (red header rule, blue lines). */
+/* Layout: one torn-out sheet of ruled notebook paper (punched holes, red margin) lying on a desk.
+   Notes inside are squared paper with torn tops; ballpoint blue is the accent, highlighters mark things. */
 :root{
-  --bg:#edf0f4; --surface:#ffffff; --ink:#17212d; --muted:#5a6677; --line:#d5dbe4;
-  --accent:#2347c5; --accent-ink:#ffffff;
-  --card:#fffefa; --rule-red:#d4524a; --rule-blue:rgba(35,71,197,.11); --shadow:0 1px 2px rgba(20,30,50,.08),0 10px 30px rgba(20,30,50,.10);
+  --bg:#fbfcfd; --surface:#fbfcfd; --ink:#24282f; --muted:#5f6674; --line:#c9d2e0;
+  --accent:#2343b0; --accent-ink:#ffffff;
+  --card:#ffffff; --rule-red:#de7272; --rule-blue:rgba(60,100,200,.15); --shadow:0 1px 2px rgba(20,30,50,.10),0 8px 22px rgba(20,30,50,.12);
+  --desk:#d5dbe3; --paper:#fbfcfd; --ruled:rgba(70,110,200,.17); --margin:rgba(222,92,92,.55);
+  --note:#f6f8fc; --grid:rgba(70,110,200,.11); --sketch:rgba(36,40,47,.72);
+  --hl:#fff07a; --hl-hit:#bdf2a6; --hl-miss:#ffbccc; --sticky:#fff3a3; --sticky-ink:#3b3520; --tape:rgba(150,180,230,.45);
   --again:#c4433a; --hard:#a86c12; --good:#2b844a; --easy:#2a68c9;
   --new:#2a68c9; --learn:#c4433a; --rev:#2b844a;
   --bronze:#a5652e; --silver:#6b7788; --gold:#9c7406;
-  --font-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --font-display:"Caveat","Kalam","Segoe Print","Bradley Hand",cursive;
+  --font-hand:"Kalam","Segoe Print","Bradley Hand","Comic Sans MS",cursive;
+  --torn-top:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 16' preserveAspectRatio='none'%3E%3Cpath d='M0 16 L0.0 5.3 L5.1 7.6 L9.6 6.8 L16.1 3.4 L23.7 3.3 L30.7 3.5 L35.3 6.0 L45.1 3.9 L50.7 7.4 L61.3 7.0 L68.1 9.8 L72.4 9.0 L78.5 4.0 L83.3 5.2 L93.0 4.3 L101.1 7.5 L107.7 6.8 L112.1 3.4 L117.6 7.8 L124.5 5.2 L132.6 6.2 L138.7 8.6 L147.6 4.7 L155.7 6.7 L165.8 8.1 L171.8 9.9 L176.6 5.9 L185.9 4.1 L193.4 3.3 L202.0 8.4 L210.0 9.1 L216.2 7.9 L224.4 7.1 L231.6 8.9 L240.0 5.3 L240 16 Z' fill='black'/%3E%3C/svg%3E");
+  --torn-bottom:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 16' preserveAspectRatio='none'%3E%3Cpath d='M0 0 L240 0 L240.0 10.7 L231.6 7.1 L224.4 8.9 L216.2 8.1 L210.0 6.9 L202.0 7.6 L193.4 12.7 L185.9 11.9 L176.6 10.1 L171.8 6.1 L165.8 7.9 L155.7 9.3 L147.6 11.3 L138.7 7.4 L132.6 9.8 L124.5 10.8 L117.6 8.2 L112.1 12.6 L107.7 9.2 L101.1 8.5 L93.0 11.7 L83.3 10.8 L78.5 12.0 L72.4 7.0 L68.1 6.2 L61.3 9.0 L50.7 8.6 L45.1 12.1 L35.3 10.0 L30.7 12.5 L23.7 12.7 L16.1 12.6 L9.6 9.2 L5.1 8.4 L0.0 10.7 Z' fill='black'/%3E%3C/svg%3E");
+  --wobble:255px 14px 225px 14px/14px 225px 14px 255px;
+  --wobble-soft:18px 5px 16px 6px/6px 16px 5px 18px;
   --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
   --radius:10px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#10151c; --surface:#18202a; --ink:#e6ebf1; --muted:#97a2b2; --line:#2a3441;
-  --accent:#86a2ff; --accent-ink:#0c1220;
-  --card:#1c2531; --rule-red:#e06a61; --rule-blue:rgba(134,162,255,.09); --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  --bg:#1b1f26; --surface:#1b1f26; --ink:#e7e9ee; --muted:#9ca4b3; --line:#363f4c;
+  --accent:#93b1ff; --accent-ink:#0d1220;
+  --card:#242a35; --rule-red:#d87878; --rule-blue:rgba(140,170,240,.11); --shadow:0 1px 2px rgba(0,0,0,.45),0 8px 22px rgba(0,0,0,.4);
+  --desk:#0c0f13; --paper:#1b1f26; --ruled:rgba(140,170,240,.10); --margin:rgba(230,110,110,.42);
+  --note:#20252e; --grid:rgba(140,170,240,.08); --sketch:rgba(231,233,238,.6);
+  --hl:rgba(255,226,80,.30); --hl-hit:rgba(110,225,130,.28); --hl-miss:rgba(255,110,150,.30); --sticky:#4d4721; --sticky-ink:#f5edc2; --tape:rgba(140,170,240,.28);
   --again:#ee6e64; --hard:#e2a544; --good:#55c27a; --easy:#6ea8ff;
   --new:#6ea8ff; --learn:#ee6e64; --rev:#55c27a; color-scheme:dark;
   --bronze:#d99a63; --silver:#b4bfcc; --gold:#e6bb3c;
 }}
 :root[data-theme="dark"]{
-  --bg:#10151c; --surface:#18202a; --ink:#e6ebf1; --muted:#97a2b2; --line:#2a3441;
-  --accent:#86a2ff; --accent-ink:#0c1220;
-  --card:#1c2531; --rule-red:#e06a61; --rule-blue:rgba(134,162,255,.09); --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  --bg:#1b1f26; --surface:#1b1f26; --ink:#e7e9ee; --muted:#9ca4b3; --line:#363f4c;
+  --accent:#93b1ff; --accent-ink:#0d1220;
+  --card:#242a35; --rule-red:#d87878; --rule-blue:rgba(140,170,240,.11); --shadow:0 1px 2px rgba(0,0,0,.45),0 8px 22px rgba(0,0,0,.4);
+  --desk:#0c0f13; --paper:#1b1f26; --ruled:rgba(140,170,240,.10); --margin:rgba(230,110,110,.42);
+  --note:#20252e; --grid:rgba(140,170,240,.08); --sketch:rgba(231,233,238,.6);
+  --hl:rgba(255,226,80,.30); --hl-hit:rgba(110,225,130,.28); --hl-miss:rgba(255,110,150,.30); --sticky:#4d4721; --sticky-ink:#f5edc2; --tape:rgba(140,170,240,.28);
   --again:#ee6e64; --hard:#e2a544; --good:#55c27a; --easy:#6ea8ff;
   --new:#6ea8ff; --learn:#ee6e64; --rev:#55c27a; color-scheme:dark;
   --bronze:#d99a63; --silver:#b4bfcc; --gold:#e6bb3c;
@@ -231,6 +246,118 @@ textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,tra
 .week i.now{border-color:var(--good)}
 @media (max-width:440px){.rates{grid-template-columns:repeat(2,minmax(0,1fr))}.card{min-height:260px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ===================== Notebook style ===================== */
+body{background:var(--desk)}
+#app{max-width:860px;position:relative;background-color:var(--paper);
+  background-image:
+    radial-gradient(circle at 22px 50%, var(--desk) 6.5px, transparent 7.5px),
+    linear-gradient(90deg, transparent 52px, var(--margin) 52px 54px, transparent 54px),
+    repeating-linear-gradient(to bottom, transparent 0 31px, var(--ruled) 31px 32px);
+  background-size:44px 96px, 100% 100%, 100% 32px;
+  background-repeat:repeat-y, no-repeat, repeat;
+  background-position:0 48px, 0 0, 0 24px;
+  padding:56px clamp(18px,4vw,44px) 64px 76px;
+  -webkit-mask:var(--torn-top) top left/240px 16px repeat-x, linear-gradient(#000 0 0) 0 15px/100% calc(100% - 30px) no-repeat, var(--torn-bottom) bottom left/240px 16px repeat-x;
+  mask:var(--torn-top) top left/240px 16px repeat-x, linear-gradient(#000 0 0) 0 15px/100% calc(100% - 30px) no-repeat, var(--torn-bottom) bottom left/240px 16px repeat-x}
+
+/* Handwriting for headings, print for reading */
+h1{font-family:var(--font-display);font-size:clamp(46px,8vw,64px);font-weight:700;color:var(--accent);letter-spacing:0;line-height:.95}
+h2{font-family:var(--font-display);font-size:32px;font-weight:700;line-height:1.05;align-self:flex-start;width:fit-content;padding:0 6px;
+  background:linear-gradient(transparent 55%, var(--hl) 55% 90%, transparent 90%)}
+h3{font-family:var(--font-hand);font-size:21px;font-weight:700}
+.lede{font-size:16.5px}
+.eyebrow{font-family:var(--font-hand);text-transform:none;letter-spacing:0;font-size:15px;font-weight:700}
+.top-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.date-field{font-family:var(--font-hand);font-size:15px;color:var(--muted);border-bottom:1.5px solid var(--sketch);padding:0 2px 1px 6px}
+.date-field b{color:var(--accent);font-weight:400}
+@media (max-width:600px){.top-right{align-items:flex-start}}
+
+/* Sketched controls: wobbly hand-drawn outlines */
+.btn{border-radius:var(--wobble);border-width:2px;font-weight:700}
+.btn.primary{background:var(--hl);color:var(--ink);border:2px solid var(--ink);box-shadow:2px 2px 0 var(--ink);transition:transform .08s ease,box-shadow .08s ease}
+.btn.primary:hover{filter:none;transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--ink)}
+.btn.primary:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--ink)}
+.btn.ghost{background:transparent;border-color:var(--sketch)}
+.btn.ghost:hover{border-color:var(--ink)}
+.btn.ghost[aria-pressed="true"]{background:var(--hl);color:var(--ink);border-color:var(--ink)}
+.btn.danger.solid{background:var(--again);border-color:var(--again)}
+kbd{border-radius:var(--wobble)}
+input[type=text],input[type=number],select{background:transparent;border:2px solid var(--sketch);border-radius:var(--wobble);font-family:var(--font-hand);font-size:17px}
+.linkish{font-family:var(--font-hand);font-size:15px}
+
+/* Notes torn from a squared notebook */
+.panel,.today{background-color:var(--note);
+  background-image:linear-gradient(var(--grid) 1px, transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:16px 16px;border:0;border-radius:0;padding-top:30px;
+  -webkit-mask:var(--torn-top) top left/240px 12px repeat-x, linear-gradient(#000 0 0) 0 11px/100% calc(100% - 11px) no-repeat;
+  mask:var(--torn-top) top left/240px 12px repeat-x, linear-gradient(#000 0 0) 0 11px/100% calc(100% - 11px) no-repeat}
+.drop{background:transparent;border:2.5px dashed var(--sketch);border-radius:var(--wobble-soft)}
+.drop strong{font-family:var(--font-display);font-size:30px;font-weight:700;line-height:1}
+.decks{border-top:0}
+.deck{border-bottom:1.5px dashed var(--line)}
+.tile,.badge,.table-wrap{border:2px solid var(--sketch);border-radius:var(--wobble-soft);background:transparent}
+.tile b{font-family:var(--font-display);font-size:36px;font-weight:700}
+.today .num{font-family:var(--font-display);font-size:38px}
+th{background:transparent;font-family:var(--font-hand);text-transform:none;letter-spacing:0;font-size:14px}
+.tier{font-family:var(--font-hand);border-width:2px;border-radius:var(--wobble);font-size:13px}
+.segbar{border:1.5px solid var(--sketch);border-radius:var(--wobble);height:11px;background:transparent}
+.goalbar{border:1.5px solid var(--sketch);border-radius:var(--wobble);height:10px;background:transparent}
+.week i{border-color:var(--sketch);border-radius:var(--wobble)}
+.week i.on{background:var(--good)}
+.kasten{border:2.5px solid var(--sketch);border-top:0;border-radius:0 0 var(--wobble-soft)}
+.fach{border-left:1.5px dashed var(--line)}
+.fach b{font-family:var(--font-display);font-size:30px}
+.fach .nm{font-family:var(--font-hand)}
+
+/* Badges are ink stamps */
+.badge .disc{font-family:var(--font-hand);font-size:15px;border:2px dashed var(--line)}
+.badge.on .disc{border:3px double var(--b);background:transparent;transform:rotate(-9deg)}
+.badge.on:nth-child(even) .disc{transform:rotate(7deg)}
+.badge:not(.on){border-style:dashed;border-color:var(--line)}
+.badge.on{border-color:var(--sketch)}
+.badge .txt b{overflow-wrap:anywhere;hyphens:auto}
+
+/* Highlighters instead of tinted boxes */
+mark.kw{background:var(--hl)}
+mark.hit{background:var(--hl-hit)}
+mark.miss{background:var(--hl-miss)}
+.chip{font-family:var(--font-hand);border-width:2px;border-radius:var(--wobble);font-size:14px}
+.verdict{border:2px solid var(--c);border-radius:var(--wobble-soft);background:transparent}
+.verdict b{font-family:var(--font-hand);font-size:18px}
+
+/* Study: the index card is taped onto the page */
+.study-bar .name{font-family:var(--font-hand);font-size:21px}
+.progress{background:transparent;border:1.5px solid var(--sketch);border-radius:var(--wobble);height:8px}
+.card{transform:rotate(-.5deg);border-radius:3px}
+.card::after{content:"";position:absolute;top:-11px;left:50%;width:120px;height:26px;background:var(--tape);transform:translateX(-50%) rotate(-3deg);
+  clip-path:polygon(0 8%,4% 0,96% 6%,100% 0,98% 50%,100% 100%,3% 94%,0 100%,2% 50%)}
+.face.front{font-family:var(--font-hand);font-weight:400}
+.rate{border:2px solid var(--sketch);border-top:5px solid var(--c);border-radius:var(--wobble-soft);background:transparent}
+.rate b{font-family:var(--font-hand);font-size:17px}
+.rate.suggested{background:var(--hl);box-shadow:none;border-color:var(--ink);border-top-color:var(--c)}
+.rate.suggested b,.rate.suggested span{color:var(--ink)}
+.opt{border:2px solid var(--sketch);border-radius:var(--wobble-soft);background:transparent}
+.opt.right{background:var(--hl-hit);border-color:var(--good)}
+.opt.wrong{background:var(--hl-miss);border-color:var(--again)}
+/* Answers are written on a line, in handwriting */
+#type-input{font-family:var(--font-hand);font-size:21px;background:transparent;border:0;border-bottom:2px solid var(--accent);border-radius:0;padding:4px 6px}
+textarea#type-input{border-bottom:0;line-height:32px;padding:0 6px;min-height:100px;
+  background-image:repeating-linear-gradient(to bottom, transparent 0 31px, var(--accent) 31px 32px);background-attachment:local}
+.done .big{font-family:var(--font-display);font-size:clamp(40px,7vw,54px);color:var(--accent)}
+
+/* Messages arrive as sticky notes */
+.toast{background:var(--sticky);color:var(--sticky-ink);font-family:var(--font-hand);font-size:16px;border-radius:2px;
+  transform:translateX(-50%) rotate(-1.5deg);box-shadow:0 2px 3px rgba(0,0,0,.12),0 10px 22px rgba(0,0,0,.18)}
+
+@media (max-width:600px){
+  #app{padding:52px 16px 60px 44px;
+    background-image:radial-gradient(circle at 13px 50%, var(--desk) 5px, transparent 6px),
+      linear-gradient(90deg, transparent 32px, var(--margin) 32px 34px, transparent 34px),
+      repeating-linear-gradient(to bottom, transparent 0 31px, var(--ruled) 31px 32px);
+    background-size:26px 80px, 100% 100%, 100% 32px}
+  h1{font-size:46px}
+}
+@media (prefers-reduced-motion:reduce){.btn.primary:hover,.btn.primary:active{transform:none}}
 </style>
 </head>
 <body>
@@ -1058,7 +1185,10 @@ function homeHTML() {
       <h1>Karteikasten</h1>
       <p class="lede">Lade eine CSV-Datei hoch und lerne täglich ein paar Minuten. Die App zeigt dir jede Karte kurz bevor du sie vergessen würdest.</p>
     </div>
-    <div class="storage" id="storage">${storageLabel()}</div>
+    <div class="top-right">
+      <span class="date-field">Datum: <b>${new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" })}</b></span>
+      <div class="storage" id="storage">${storageLabel()}</div>
+    </div>
   </header>`;
   if (state.loading) return head + `<p class="loading">Lade deine Stapel …</p>`;
   if (state.loadError) return head + `<div class="panel"><p class="error">${esc(state.loadError)}</p></div>`;
@@ -1407,7 +1537,7 @@ function studyHTML() {
     <div class="progress" aria-hidden="true"><i style="width:${(prog * 100).toFixed(1)}%"></i></div>
     <article class="card ${flipTap ? "tap" : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
       <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span><span>${esc(info)}</span></div>
-      <div class="face front ${sizeF}">${richText(front)}</div>
+      <div class="face front ${sizeF}"><span>${richText(front)}</span></div>
       ${s.revealed ? `<div class="face back ${sizeB}">${s.answer?.method === "keywords" ? highlightAnswer(back, s.answer) : richText(back)}</div>` : ""}
     </article>
     ${feedback}
