@@ -80,6 +80,16 @@ Pro Antwort speichert die App im Verlauf (`log-<Datum>`): Karte, Richtung, Bewer
 
 Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges Behalten. Es gibt keine Punkte für „richtige“ Bewertungen, weil das dazu verleiten würde, Karten besser zu bewerten, als sie liefen. Der Algorithmus würde dann zu lange Abstände planen.
 
+## Handy und Computer gleichzeitig
+
+Mehrere Geräte oder Tabs können mit demselben Server lernen, ohne sich gegenseitig zu überschreiben:
+
+- **Nachladen:** Ein offener Tab holt sich neue Stände, sobald du zu ihm zurückkehrst, alle 30 Sekunden und vor jeder Lernrunde. Dann erscheint kurz „Neuer Stand von einem anderen Gerät übernommen“.
+- **Zusammenführen:** Speichern zwei Geräte fast gleichzeitig, lehnt der Server den veralteten Stand ab, und die App führt beide zusammen. Pro Karte gilt die jüngste Bewertung, Antworten von beiden Geräten bleiben im Verlauf, und die Tageszähler zählen beide Geräte. Bei Textänderungen gilt die jüngste Fassung.
+- **Gleiche Karte auf zwei Geräten:** Es zählt die später abgegebene Bewertung.
+
+Technisch bekommt jedes gespeicherte Dokument eine Versionsnummer (`/api/changes`, Kopfzeile `X-If-Rev`).
+
 ## Wo die Daten liegen
 
 Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.db` (SQLite).

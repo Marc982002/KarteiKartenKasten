@@ -626,34 +626,51 @@ function previewFor(s) {
 /* ---------- Storage ---------- */
 const enc = st => st ? [st.q, +st.s.toFixed(4), +st.d.toFixed(3), st.due, st.last, st.reps, st.lapses, st.step] : null;
 const dec = a => Array.isArray(a) ? { q: a[0], s: a[1], d: a[2], due: a[3], last: a[4], reps: a[5], lapses: a[6], step: a[7] } : null;
-const toRow = c => { const r = { i: c.i, f: c.f, b: c.b, sf: enc(c.sf), sr: enc(c.sr) }; if (c.x) r.x = 1; return r; };
-const fromRow = r => ({ i: r.i, f: r.f, b: r.b, sf: dec(r.sf), sr: dec(r.sr), c: r._k || 0, x: !!r.x });
+// m: when the card's text or suspension last changed (to merge edits from two devices).
+const toRow = c => { const r = { i: c.i, f: c.f, b: c.b, sf: enc(c.sf), sr: enc(c.sr) }; if (c.x) r.x = 1; if (c.m) r.m = c.m; return r; };
+const fromRow = r => { const c = { i: r.i, f: r.f, b: r.b, sf: dec(r.sf), sr: dec(r.sr), c: r._k || 0, x: !!r.x }; if (r.m) c.m = r.m; return c; };
 const META_KEYS = ["id", "name", "created", "dir", "newPerDay", "retention", "newDay", "newCount", "revDay", "revCount", "chunks", "cardCount", "mode", "topic"];
 const metaOf = deck => { const m = { kind: "deck" }; for (const k of META_KEYS) m[k] = deck[k] ?? null; return m; };
 const clone = x => JSON.parse(JSON.stringify(x));
 
 // Talks to server.js, which keeps everything in data/karteikasten.db on this computer.
+// Every document has a revision. Writes send the revision this tab last saw; if another device
+// wrote in between, the server answers 409 and the app merges both versions (see "Several devices").
 function ApiStore() {
+  const revs = new Map();
   async function api(method, id, body) {
     let r;
+    const headers = body ? { "Content-Type": "application/json", "X-If-Rev": String(revs.get(id) ?? 0) } : {};
     try {
-      r = await fetch("/api/docs/" + encodeURIComponent(id), { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+      r = await fetch("/api/docs/" + encodeURIComponent(id), { method, headers, body: body ? JSON.stringify(body) : undefined });
     } catch { throw { code: "unavailable", message: "Server nicht erreichbar" }; }
+    if (r.status === 409) throw { code: "conflict", id, remote: await r.json().catch(() => null), message: "Inzwischen auf einem anderen Gerät geändert" };
     if (r.status === 404 && method === "GET") return null;
     if (!r.ok) {
       const msg = (await r.json().catch(() => ({}))).error || r.statusText;
       throw { code: r.status === 413 ? "quota_exceeded" : r.status >= 500 ? "unavailable" : "invalid_argument", message: msg };
     }
-    return r.status === 204 ? null : r.json();
+    if (method === "GET") { const rv = r.headers.get("X-Rev"); if (rv != null) revs.set(id, +rv); return r.json(); }
+    const out = await r.json().catch(() => null);
+    if (out && typeof out.rev === "number") revs.set(id, out.rev);
+    return null;
+  }
+  async function listWithRevs(kind) {
+    const r = await fetch("/api/docs?revs=1&kind=" + encodeURIComponent(kind));
+    if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
+    const list = await r.json();
+    for (const d of list) revs.set(d.id, d.rev);
+    return list.map(d => d.data);
+  }
+  async function getJSON(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
+    return r.json();
   }
   const chunkId = (id, k) => "deck-" + id + "-c" + k;
   return {
     kind: "server",
-    async listDecks() {
-      const r = await fetch("/api/docs?kind=deck");
-      if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
-      return r.json();
-    },
+    listDecks: () => listWithRevs("deck"),
     async loadCards(deck) {
       const docs = await Promise.all(Array.from({ length: deck.chunks || 0 }, (_, k) => api("GET", chunkId(deck.id, k))));
       return docs.flatMap((d, k) => d ? (d.cards || []).map(r => ({ ...r, _k: k })) : []);
@@ -663,12 +680,23 @@ function ApiStore() {
     delChunk: (id, k) => api("DELETE", chunkId(id, k)),
     async delDeck(id, chunks) { for (let k = 0; k < chunks; k++) await api("DELETE", chunkId(id, k)); await api("DELETE", "deck-" + id); },
     getDoc: name => api("GET", name),
-    async listKind(kind) {
-      const r = await fetch("/api/docs?kind=" + encodeURIComponent(kind));
-      if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
-      return r.json();
+    listKind: kind => listWithRevs(kind),
+    putDoc: (name, data) => api("PUT", name, data),
+    // For keeping up with other devices. Reading here does not touch the known revisions;
+    // the caller records them once it has merged what it read.
+    currentRev: async () => (await getJSON("/api/rev")).rev,
+    changes: since => getJSON("/api/changes?since=" + since),
+    async fetchChunks(meta) {
+      const out = [];
+      for (let k = 0; k < (meta.chunks || 0); k++) {
+        const r = await fetch("/api/docs/" + encodeURIComponent(chunkId(meta.id, k)));
+        if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
+        out.push({ id: chunkId(meta.id, k), rev: +(r.headers.get("X-Rev") || 0), data: await r.json() });
+      }
+      return out;
     },
-    putDoc: (name, data) => api("PUT", name, data)
+    revOf: id => revs.get(id) ?? 0,
+    setRev: (id, rev) => revs.set(id, rev)
   };
 }
 function LocalStore() {
@@ -696,7 +724,9 @@ function LocalStore() {
 }
 
 /* ---------- Write queue (one write at a time, coalesced) ---------- */
-const WQ = { pending: new Map(), timer: 0, busy: false, retried: new Set() };
+const WQ = { pending: new Map(), timer: 0, busy: false, retried: new Set(), conflicts: new Map() };
+// Several devices: what this tab knows about the server (see "Several devices" below).
+const SYNC = { rev: 0, busy: false, merged: false, seen: new Set(), undone: new Set(), deleted: new Set() };
 function queueWrite(key, fn, delay = 1200) {
   WQ.pending.set(key, fn); setSave("pending");
   clearTimeout(WQ.timer); WQ.timer = setTimeout(flush, delay);
@@ -711,8 +741,16 @@ async function flush() {
       const entries = [...WQ.pending.entries()].sort((a, b) => (a[0][0] === "m") - (b[0][0] === "m"));
       WQ.pending.clear();
       for (const [key, fn] of entries) {
-        try { await fn(); WQ.retried.delete(key); }
+        try { await fn(); WQ.retried.delete(key); WQ.conflicts.delete(key); }
         catch (e) {
+          if (e?.code === "conflict") {
+            // Another device wrote this document first: merge its version in, then write again.
+            const n = (WQ.conflicts.get(key) || 0) + 1; WQ.conflicts.set(key, n);
+            const how = n <= 5 ? resolveConflict(key, e) : "fail";
+            if (how === "retry") { if (!WQ.pending.has(key)) WQ.pending.set(key, fn); SYNC.merged = true; continue; }
+            if (how === "drop") { WQ.conflicts.delete(key); setTimeout(() => pullChanges(), 0); continue; }
+            failed = true; toast("Zwei Geräte haben gleichzeitig gespeichert und das Zusammenführen hat nicht geklappt. Lade die Seite neu."); continue;
+          }
           if ((e?.code === "unavailable" || e?.code === "resource_exhausted") && !WQ.retried.has(key)) {
             WQ.retried.add(key); setTimeout(() => queueWrite(key, fn, 0), 1500 + Math.random() * 1500);
           } else {
@@ -726,6 +764,11 @@ async function flush() {
     }
   } finally { WQ.busy = false; }
   setSave(failed ? "error" : "saved");
+  if (SYNC.merged) {
+    SYNC.merged = false;
+    toast("Auf einem anderen Gerät wurde gleichzeitig gelernt. Beide Stände sind zusammengeführt.");
+    if (!isTyping()) render();
+  }
 }
 function markMeta(deck) { queueWrite("m:" + deck.id, () => state.store.putMeta(deck)); }
 function markChunk(deck, k) {
@@ -746,7 +789,9 @@ function assignChunks(deck) {
   for (let i = deck.chunks; i < old; i++) { const id = deck.id, kk = i; queueWrite("c:" + id + ":" + kk, () => state.store.delChunk(id, kk)); }
   markMeta(deck);
 }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); else pullChanges(); });
+window.addEventListener("focus", () => pullChanges());
+setInterval(() => { if (document.visibilityState === "visible") pullChanges(); }, 30000);
 window.addEventListener("pagehide", flush);
 
 /* ---------- App state ---------- */
@@ -1078,13 +1123,16 @@ function unrecordAnswer() {
   const e = state.log.entries.pop();
   const list = state.attempts.get(e[0] + ":" + e[1]);
   if (list && list[list.length - 1] === e) list.pop();
+  SYNC.seen.delete(entryKey(e)); SYNC.undone.add(entryKey(e)); // so merging with another device does not bring it back
   state.profile.days[day] = Math.max(0, (state.profile.days[day] || 0) - 1);
   markLog(); markProfile();
 }
 /* ---------- Answer history per card (all days) ---------- */
 function addAttempt(e) {
-  const k = e[0] + ":" + e[1];
-  (state.attempts.get(k) || state.attempts.set(k, []).get(k)).push(e);
+  const id = entryKey(e); if (SYNC.seen.has(id)) return; SYNC.seen.add(id);
+  const k = e[0] + ":" + e[1], list = state.attempts.get(k) || state.attempts.set(k, []).get(k);
+  list.push(e);
+  if (list.length > 1 && list[list.length - 2][3] > e[3]) list.sort((a, b) => a[3] - b[3]); // merged in from another device
 }
 // What to keep about one answer: the text, the app's judgement and suggestion, the time taken.
 function answerInfo(s) {
@@ -1400,8 +1448,9 @@ function dontKnow() {
 }
 
 /* ---------- Session ---------- */
-function startStudy(id) { const deck = deckById(id); if (deck) startSession([deck], deck.name); }
-function startTopic(id) { const t = topicById(id); if (t) startSession(decksOfTopic(id), t.name, id); }
+// Before a round: pick up what another device did, so no card comes twice.
+async function startStudy(id) { await pullChanges({ quiet: true }); const deck = deckById(id); if (deck) startSession([deck], deck.name); }
+async function startTopic(id) { await pullChanges({ quiet: true }); const t = topicById(id); if (t) startSession(decksOfTopic(id), t.name, id); }
 function startSession(decks, title, topicId = null) {
   const qs = decks.map(buildQueue);
   const rev = qs.flatMap(q => q.rev).sort((a, b) => a.pri - b.pri);
@@ -2175,11 +2224,173 @@ function saveCardText(deck, c, f, b) {
   f = (f || "").trim().slice(0, 20000); b = (b || "").trim().slice(0, 20000);
   if (!f || !b) { toast("Vorder- und Rückseite dürfen nicht leer sein."); return false; }
   if ((state.cards[deck.id] || []).some(x => x !== c && x.f === f)) { toast("Eine andere Karte in diesem Stapel hat schon genau diese Vorderseite."); return false; }
-  c.f = f; c.b = b; cardsRev++;
+  c.f = f; c.b = b; c.m = Date.now(); cardsRev++;
   return true;
 }
 function setSuspended(deck, c, on) {
-  c.x = !!on; markChunk(deck, c.c);
+  c.x = !!on; c.m = Date.now(); markChunk(deck, c.c);
+}
+
+/* ---------- Several devices: merge instead of overwrite ----------
+   Phone and computer share one server. A write based on an old state is refused (409);
+   then both versions are merged: per card the latest review wins, answers from both are kept.
+   An open tab also checks for news when it comes back into view and every 30 seconds. */
+const entryKey = e => e[0] + ":" + e[1] + ":" + e[3];
+const isTyping = () => { const a = document.activeElement; return !!a && !!a.matches?.("input[type=text],textarea"); };
+// One direction's learning state from two devices: the later review wins. A reset (state removed
+// on purpose, marked by the card's change time) wins over reviews that happened before it.
+function newerState(a, b, am = 0, bm = 0) {
+  if (!a && !b) return null;
+  if (a && b) return b.last > a.last || (b.last === a.last && b.reps > a.reps) ? b : a;
+  if (!a) return am > b.last ? null : b;
+  return bm > a.last ? null : a;
+}
+// Returns how many directions the other device started today (they count toward today's new cards).
+function mergeCardInto(local, remote) {
+  const lm = local.m || 0, rm = remote.m || 0, today = dayKey();
+  let started = 0;
+  for (const k of ["sf", "sr"]) {
+    const was = local[k];
+    local[k] = newerState(was, remote[k], lm, rm);
+    if (!was && local[k] && dayKey(local[k].last) === today) started++;
+  }
+  if (rm > lm) { local.f = remote.f; local.b = remote.b; local.x = remote.x; local.m = rm; cardsRev++; }
+  return started;
+}
+const startedToday = c => ["sf", "sr"].filter(k => c[k] && dayKey(c[k].last) === dayKey()).length;
+// Today's counters of a deck grow by what the other device did today.
+function bumpToday(deck, field, n) {
+  if (!n) return;
+  const day = field === "newCount" ? "newDay" : "revDay", t = dayKey();
+  if (deck[day] !== t) { deck[day] = t; deck[field] = 0; }
+  deck[field] = (deck[field] || 0) + n;
+}
+// Two copies of a card (possible after cards moved between storage chunks on two devices): keep one, merged.
+function dedupeCards(cards) {
+  const byId = new Map(), out = [];
+  for (const c of cards) { const have = byId.get(c.i); if (have) mergeCardInto(have, c); else { byId.set(c.i, c); out.push(c); } }
+  return out;
+}
+function mergeLogEntries(a, b) {
+  const m = new Map();
+  for (const e of [...a, ...b]) { const k = entryKey(e); if (!SYNC.undone.has(k) && !m.has(k)) m.set(k, e); }
+  return [...m.values()].sort((x, y) => x[3] - y[3]);
+}
+function applyChunkRows(deck, k, rows) {
+  const cards = state.cards[deck.id] || (state.cards[deck.id] = []);
+  const byId = new Map(cards.map(c => [c.i, c]));
+  let started = 0;
+  for (const r of rows || []) {
+    const rc = fromRow({ ...r, _k: k }), lc = byId.get(rc.i);
+    if (lc) started += mergeCardInto(lc, rc);
+    else if (!SYNC.deleted.has(rc.i)) { cards.push(rc); byId.set(rc.i, rc); cardsRev++; started += startedToday(rc); }
+  }
+  bumpToday(deck, "newCount", started);
+}
+// pull: nothing of ours is waiting to be saved, so settings come from the other device.
+// Today's counters: on the same day this tab's count already includes what merging brought in.
+function applyMeta(deck, r, pull) {
+  for (const [day, count] of [["newDay", "newCount"], ["revDay", "revCount"]]) {
+    if ((r[day] || "") > (deck[day] || "")) { deck[day] = r[day]; deck[count] = r[count] || 0; }
+  }
+  if (pull) {
+    const n = normDeck(r);
+    for (const k of ["name", "dir", "mode", "newPerDay", "retention", "topic", "created"]) deck[k] = n[k] ?? null;
+    deck.chunks = r.chunks || 0;
+  } else deck.chunks = Math.max(deck.chunks || 0, r.chunks || 0);
+}
+function applyProfile(r, pull) {
+  const p = state.profile;
+  for (const [d, n] of Object.entries(r.days || {})) p.days[d] = Math.max(p.days[d] || 0, n || 0);
+  for (const [b, t] of Object.entries(r.badges || {})) p.badges[b] = p.badges[b] ? Math.min(p.badges[b], t) : t;
+  for (const [d, v] of Object.entries(r.daily || {})) { const l = p.daily[d] || {}; p.daily[d] = { learned: Math.max(l.learned || 0, v?.learned || 0), up: Math.max(l.up || 0, v?.up || 0) }; }
+  if (pull && r.goal) p.goal = r.goal;
+}
+function applyLog(r) {
+  if (!r || !Array.isArray(r.entries)) return;
+  for (const e of r.entries) if (!SYNC.undone.has(entryKey(e))) addAttempt(e);
+  if (r.day !== state.log.day) return;
+  const known = new Set(state.log.entries.map(entryKey));
+  state.log.entries = mergeLogEntries(state.log.entries, r.entries);
+  const perDeck = {};
+  for (const e of state.log.entries) if (!known.has(entryKey(e))) perDeck[e[4]] = (perDeck[e[4]] || 0) + 1;
+  for (const [id, n] of Object.entries(perDeck)) { const d = deckById(id); if (d) bumpToday(d, "revCount", n); }
+  state.profile.days[r.day] = Math.max(state.profile.days[r.day] || 0, state.log.entries.length);
+}
+// A refused write: merge the other device's version into this tab. "retry" writes again, "drop" gives up the write.
+function resolveConflict(key, e) {
+  const remote = e.remote || {}, data = remote.data;
+  state.store.setRev(e.id, remote.rev ?? 0);
+  const [type, a, b] = key.split(":");
+  if (type === "c" || type === "m") {
+    const deck = deckById(a);
+    if (!deck || !data) return "drop"; // deck deleted on the other device: the next check removes it here too
+    if (type === "c") applyChunkRows(deck, +b, data.cards);
+    else applyMeta(deck, data, false);
+    return "retry";
+  }
+  if (type === "p" && data) applyProfile(data, false);
+  if (type === "l" && data) applyLog(data);
+  return "retry"; // topics: this tab's version wins
+}
+// Pick up what other devices saved since this tab last looked.
+async function pullChanges({ quiet = false } = {}) {
+  const st = state.store;
+  if (!st?.changes || SYNC.busy || state.loading || state.loadError || state.restore?.busy) return;
+  SYNC.busy = true;
+  try {
+    await flush();
+    const ch = await st.changes(SYNC.rev);
+    const docs = ch.docs.filter(d => st.revOf(d.id) !== d.rev);
+    const gone = ch.deleted.filter(d => st.revOf(d.id) !== d.rev);
+    if (!docs.length && !gone.length) { SYNC.rev = ch.rev; return; }
+    // Decks with changed cards are read completely, so moved and deleted cards come out right.
+    const metas = new Map(), touched = new Set();
+    for (const d of docs) { if (d.data?.kind === "deck") metas.set(d.data.id, d.data); if (d.data?.kind === "chunk") touched.add(d.data.deck); }
+    for (const id of metas.keys()) touched.add(id);
+    const chunks = new Map();
+    for (const id of touched) {
+      const meta = metas.get(id) || (deckById(id) && metaOf(deckById(id)));
+      if (meta && !gone.some(g => g.id === "deck-" + id)) chunks.set(id, await st.fetchChunks(meta));
+    }
+    // Something of ours got queued meanwhile: leave it to the next check, after it is saved.
+    if (WQ.busy || WQ.pending.size) return;
+    for (const g of gone) {
+      st.setRev(g.id, g.rev);
+      const m = g.id.match(/^deck-(.+)$/);
+      if (m && !/-c\d+$/.test(g.id)) { state.decks = state.decks.filter(d => d.id !== m[1]); delete state.cards[m[1]]; if (state.open?.id === m[1]) state.open = null; }
+    }
+    // Order matters for today's counters: cards and answers first (they add what the other device did), settings last.
+    for (const [id, meta] of metas) if (!deckById(id) && !gone.some(g => g.id === "deck-" + id)) {
+      state.decks.unshift(normDeck({ ...meta, newDay: "", newCount: 0, revDay: "", revCount: 0 })); state.cards[id] = [];
+    }
+    for (const [id, list] of chunks) {
+      const deck = deckById(id); if (!deck) continue;
+      const rows = list.flatMap(({ data }, k) => (data?.cards || []).map(r => ({ ...r, _k: k })));
+      const seen = new Set(rows.map(r => r.i));
+      const cards = state.cards[id] = (state.cards[id] || []).filter(c => seen.has(c.i));
+      const byId = new Map(cards.map(c => [c.i, c]));
+      let started = 0;
+      for (const r of rows) {
+        const rc = fromRow(r), lc = byId.get(rc.i);
+        if (lc) { started += mergeCardInto(lc, rc); lc.c = rc.c; } else { cards.push(rc); byId.set(rc.i, rc); started += startedToday(rc); }
+      }
+      bumpToday(deck, "newCount", started);
+      deck.cardCount = cards.length; cardsRev++;
+    }
+    for (const d of docs) {
+      if (d.id === "profile" && d.data) applyProfile(d.data, true);
+      else if (d.data?.kind === "log") applyLog(d.data);
+      else if (d.id === "topics" && d.data) state.topics = normTopics(d.data.list);
+      st.setRev(d.id, d.rev);
+    }
+    for (const [id, meta] of metas) { const deck = deckById(id); if (deck) applyMeta(deck, meta, true); }
+    for (const list of chunks.values()) for (const { id, rev } of list) st.setRev(id, rev);
+    SYNC.rev = ch.rev;
+    if (!isTyping()) render();
+    if (!quiet) toast("Neuer Stand von einem anderen Gerät übernommen.");
+  } catch { /* server unreachable: try again at the next check */ }
+  finally { SYNC.busy = false; }
 }
 
 /* ---------- Backup: download everything, restore from a file ---------- */
@@ -2590,7 +2801,7 @@ document.addEventListener("click", e => {
     else if (act === "cl-del") { cl.confirmDel = b.dataset.cid; cl.edit = null; }
     else if (act === "cl-del-no") cl.confirmDel = null;
     else if (act === "cl-del-yes" && c) {
-      state.cards[deck.id] = state.cards[deck.id].filter(x => x !== c); cardsRev++;
+      state.cards[deck.id] = state.cards[deck.id].filter(x => x !== c); cardsRev++; SYNC.deleted.add(c.i);
       assignChunks(deck); cl.confirmDel = null; toast("Karte gelöscht.");
     }
     render();
@@ -2716,18 +2927,20 @@ async function boot() {
   if (!state.loadError) { checkBadges({ silent: true }); await loadBackupStatus(); }
   state.loading = false; render();
 }
+const normDeck = m => ({ ...m, dir: m.dir || "f", mode: m.mode || "auto", newPerDay: m.newPerDay ?? 20, retention: m.retention || 0.9, newCount: m.newCount || 0, revCount: m.revCount || 0 });
+const normTopics = list => { const out = Array.isArray(list) ? list : []; for (const t of out) if (!t.outline && t.tree) { t.outline = outlineFromText(t.tree); delete t.tree; } return out; };
 async function loadAll() {
+  // Read the revision first: anything written while loading shows up again at the next check, which is harmless.
+  if (state.store.currentRev) SYNC.rev = await withTimeout(state.store.currentRev(), 10000);
   const metas = await withTimeout(state.store.listDecks(), 10000);
   const loaded = await withTimeout(Promise.all(metas.map(m => state.store.loadCards(m))), 15000);
   state.cards = {};
-  metas.forEach((m, i) => { state.cards[m.id] = loaded[i].map(fromRow); });
-  state.decks = metas.map(m => ({ ...m, dir: m.dir || "f", mode: m.mode || "auto", newPerDay: m.newPerDay ?? 20, retention: m.retention || 0.9, newCount: m.newCount || 0, revCount: m.revCount || 0 }))
-    .sort((a, b) => (b.created || 0) - (a.created || 0));
+  metas.forEach((m, i) => { state.cards[m.id] = dedupeCards(loaded[i].map(fromRow)); });
+  state.decks = metas.map(normDeck).sort((a, b) => (b.created || 0) - (a.created || 0));
   const today = dayKey();
   const [profile, log, topics] = await withTimeout(Promise.all([state.store.getDoc("profile"), state.store.getDoc("log-" + today), state.store.getDoc("topics")]), 10000);
-  state.topics = Array.isArray(topics?.list) ? topics.list : [];
-  // Trees pasted before the editor existed were stored as text: turn them into an outline with ids.
-  for (const t of state.topics) if (!t.outline && t.tree) { t.outline = outlineFromText(t.tree); delete t.tree; }
+  // Trees pasted before the editor existed were stored as text: normTopics turns them into an outline with ids.
+  state.topics = normTopics(topics?.list);
   state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) }, badges: { ...(profile?.badges || {}) }, daily: { ...(profile?.daily || {}) } };
   state.log = { day: today, entries: Array.isArray(log?.entries) ? log.entries : [] };
   // Every earlier answer, for "Deine Entwicklung". Today's entries come from state.log so new ones land in the same list.
