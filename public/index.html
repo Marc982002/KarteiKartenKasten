@@ -339,6 +339,34 @@ th{background:transparent;font-family:var(--font-hand);text-transform:none;lette
 .rest-list{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px;font-size:14px}
 @media (max-width:600px){.node{grid-template-columns:minmax(0,1fr)}.node-meta{white-space:normal}.tree ul{padding-left:12px}}
 
+/* Outline editor */
+.outline-field{gap:8px}
+input[type=text].ol-title{font-family:var(--font-display);font-size:24px;font-weight:700;color:var(--accent);border:0;border-bottom:1.5px dashed var(--line);border-radius:0;padding:2px 4px;background:transparent}
+.outline{display:flex;flex-direction:column;gap:2px}
+.ol-row{display:flex;align-items:center;gap:6px;padding-left:calc(var(--d) * 28px);min-width:0}
+.ol-dot{flex:none;width:8px;height:8px;border-radius:50%;border:2px solid var(--sketch)}
+.ol-row[style*="--d:0"] .ol-dot{background:var(--sketch)}
+input[type=text].ol-input{flex:1 1 auto;min-width:0;font-family:var(--font-hand);font-size:17px;border:0;border-bottom:1.5px dashed var(--line);border-radius:0;padding:4px 2px;background:transparent;min-height:36px}
+.ol-row[style*="--d:0"] input[type=text].ol-input{font-weight:700;font-size:18px}
+input[type=text].ol-input:focus{border-bottom:2px solid var(--accent)}
+.ol-count{flex:none;font-size:12px;color:var(--muted);min-width:62px;text-align:right;font-variant-numeric:tabular-nums}
+.ol-btns{flex:none;display:flex;gap:3px}
+.ol-btn{width:28px;height:28px;display:grid;place-items:center;border:1.5px solid var(--line);border-radius:var(--wobble);background:transparent;color:var(--ink);cursor:pointer;font:700 14px/1 var(--font-body);padding:0}
+.ol-btn:hover:not([disabled]){border-color:var(--ink);background:var(--hl)}
+.ol-btn[disabled]{opacity:.3;cursor:default}
+.ol-paste{display:flex;flex-direction:column;gap:6px}
+.suggs{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.sugg{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:6px 0;border-bottom:1px dashed var(--line)}
+.sugg b{font-family:var(--font-hand);font-size:17px}
+.sugg span{font-size:13px;color:var(--muted);flex:1 1 200px;font-weight:400}
+@media (max-width:600px){
+  .ol-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"dot inp inp" ". cnt btn";column-gap:8px;row-gap:0;padding-left:calc(var(--d) * 14px);padding-bottom:4px}
+  .ol-dot{grid-area:dot}
+  .ol-row input[type=text].ol-input{grid-area:inp}
+  .ol-count{grid-area:cnt;text-align:left;min-width:0;align-self:center;white-space:nowrap}
+  .ol-btns{grid-area:btn}
+}
+
 /* Badges are ink stamps */
 .badge .disc{font-family:var(--font-hand);font-size:15px;border:2px dashed var(--line)}
 .badge.on .disc{border:3px double var(--b);background:transparent;transform:rotate(-9deg)}
@@ -674,7 +702,7 @@ function rollover(deck) {
 const topicById = id => state.topics.find(t => t.id === id);
 const decksOfTopic = id => state.decks.filter(d => d.topic === id);
 function saveTopics() {
-  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, tree: t.tree || "" })) }));
+  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, outline: t.outline || null })) }));
 }
 // Fach distribution across several decks (a topic), same shape as deckProgress().
 function progressOf(decks) {
@@ -735,7 +763,8 @@ function nodeTerms(node) {
   const cut = label.indexOf(":"), head = cut > 0 ? label.slice(0, cut) : label, rest = cut > 0 ? label.slice(cut + 1) : "";
   const terms = new Map();
   const add = (w, weight) => { const n = kn(w); if (TREE_STOP.has(n)) return; if (isTerm(n) || /\d/.test(n) && n.length >= 2) terms.set(n, Math.max(terms.get(n) || 0, weight)); };
-  splitWords(head).forEach(w => add(w, cut > 0 ? 2 : 1));
+  const short = cut < 0 && wordsOf(label).length <= 4;
+  splitWords(head).forEach(w => add(w, cut > 0 || short ? 2 : 1));
   splitWords(rest).forEach(w => add(w, 1));
   return terms;
 }
@@ -763,18 +792,97 @@ function assignCards(root, cards) {
   }
   return out;
 }
+/* Outline = what is stored: { title, children: [{ id, label, children }] }. Ids stay when a branch is renamed or moved. */
+function outlineFromText(text) {
+  const r = parseTree(text);
+  if (!r) return null;
+  const conv = n => ({ id: rid(), label: n.label, children: n.children.map(conv) });
+  return { title: r.label, children: r.children.map(conv) };
+}
+// Runtime tree (parent links, depth) from an outline. Branches without a name are skipped, their sub-branches move up.
+function buildTree(outline) {
+  if (!outline?.children?.length) return null;
+  const root = { id: "root", label: outline.title || "", depth: 0, children: [], parent: null };
+  const walk = (list, parent) => { for (const n of list) {
+    if (!n.label.trim()) { walk(n.children || [], parent); continue; }
+    const node = { id: n.id, label: n.label.trim(), depth: parent.depth + 1, children: [], parent };
+    parent.children.push(node); walk(n.children || [], node);
+  } };
+  walk(outline.children, root);
+  return root.children.length ? root : null;
+}
 const treeCache = new Map();
-// Parsed tree + assignment for a topic, recomputed only when the tree or the cards change.
-function topicTree(t) {
-  const decks = decksOfTopic(t.id), sig = (t.tree || "") + "|" + decks.map(d => d.id + ":" + d.cardCount).join(",");
-  const hit = treeCache.get(t.id);
+// Tree + assignment, recomputed only when the outline or the cards change.
+function computeTree(key, outline, decks) {
+  const sig = JSON.stringify(outline || null) + "|" + decks.map(d => d.id + ":" + d.cardCount).join(",");
+  const hit = treeCache.get(key);
   if (hit && hit.sig === sig) return hit;
-  const root = parseTree(t.tree);
+  const root = buildTree(outline);
   const entries = decks.flatMap(d => (state.cards[d.id] || []).map(c => ({ c, d })));
   const assign = root ? assignCards(root, entries.map(e => e.c)) : new Map();
   const res = { sig, root, assign, entries };
-  treeCache.set(t.id, res);
+  treeCache.set(key, res);
   return res;
+}
+const topicTree = t => computeTree(t.id, t.outline, decksOfTopic(t.id));
+const draftTree = te => computeTree("draft", te.outline, state.decks.filter(d => te.deckIds.has(d.id)));
+
+/* ---------- Branch suggestions: names and terms that keep appearing in cards without a branch ---------- */
+function suggestBranches(tt, outline) {
+  const rest = tt.entries.filter(e => !tt.assign.has(e.c.i)).map(e => e.c);
+  if (rest.length < 2) return [];
+  const tok = c => { const ws = splitWords(c.f + " " + c.b).map(kn); return [...ws, ...ws.slice(1).map((w, i) => ws[i] + w)]; };
+  const restToks = rest.map(tok), allToks = tt.entries.map(e => tok(e.c));
+  // Words already in the tree: a suggestion must bring something new.
+  const inTree = new Set();
+  const walk = list => list.forEach(n => { splitWords(n.label).forEach(w => inTree.add(kn(w))); walk(n.children || []); });
+  walk(outline?.children || []);
+  const cands = new Map();
+  const known = w => inTree.has(w) || (w.endsWith("s") && inTree.has(w.slice(0, -1)));   // "Carrs" is Carr
+  const add = (label, strict) => {
+    label = label.replace(/\s+/g, " ").trim();
+    const all = splitWords(label).map(kn);
+    if (strict && all.some(w => STOPWORDS.has(w) || TREE_STOP.has(w))) return;          // "Die Fähigkeit", "Der Wert"
+    const words = all.filter(w => w.length >= 3 && !STOPWORDS.has(w) && !TREE_STOP.has(w));
+    if (!words.length || words.length > 4 || words.some(known)) return;
+    const key = words.join(" ");
+    if (!cands.has(key)) cands.set(key, { label, words });
+  };
+  for (const c of rest) {
+    const text = plain(c.f) + " \n " + plain(c.b);
+    for (const m of (c.f + " " + c.b).matchAll(MARK)) if (m[1].length <= 40) add(m[1]);
+    for (const m of text.matchAll(/(\p{Lu}[\p{L}'-]+)\s+(?:&|und|and)\s+(\p{Lu}[\p{L}'-]+)/gu)) add(m[1] + " & " + m[2]);
+    for (const m of text.matchAll(/(\p{Lu}[\p{L}'-]+)\s+et\s+al\./gu)) add(m[1]);
+    // Names: only where the wording says it is a name ("laut Strassmann", "Teece (2007)").
+    for (const m of text.matchAll(/(?:laut|vgl\.)\s+(\p{Lu}[\p{L}'-]{2,})/gu)) add(m[1], true);
+    for (const m of text.matchAll(/(\p{Lu}[\p{L}'-]{2,})\s*\(\d{4}\)/gu)) add(m[1], true);
+    // English terms of two or three capitalised words ("Radical Incrementalism", "Design Capital").
+    for (const m of text.matchAll(/(\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+){1,2})/gu)) add(m[1], true);
+  }
+  const scored = [];
+  for (const cand of cands.values()) {
+    const hits = restToks.filter(t => cand.words.every(w => treeHit(w, t))).length;
+    const share = allToks.filter(t => cand.words.every(w => treeHit(w, t))).length / allToks.length;
+    if (hits >= 2 && share <= 0.3) scored.push({ ...cand, hits });
+  }
+  scored.sort((a, b) => b.hits - a.hits || b.words.length - a.words.length);   // on a tie the fuller name wins
+  // Keep the strongest of overlapping candidates ("Brown & Hagel" beats "Brown" and "John Seely Brown").
+  const picked = [];
+  for (const c of scored) if (!picked.some(p => p.words.some(w => c.words.includes(w)))) picked.push(c);
+  // Suggest a main branch to hang it under: the one whose terms these cards mention most.
+  // Words found in more than a quarter of all cards ("Strategie", "IT") say nothing about where a branch belongs.
+  const mains = tt.root ? tt.root.children : [];
+  const telling = w => allToks.filter(t => treeHit(w, t)).length / allToks.length <= 0.25;
+  const mainTerms = mains.map(m => { const terms = new Set(); const collect = n => { nodeTerms(n).forEach((_, w) => { if (telling(w)) terms.add(w); }); n.children.forEach(collect); }; collect(m); return [...terms]; });
+  for (const p of picked.slice(0, 6)) {
+    const cards = restToks.filter(t => p.words.every(w => treeHit(w, t)));
+    const scores = mains.map((m, i) => ({ m, sc: cards.reduce((a, t) => a + mainTerms[i].filter(w => treeHit(w, t)).length, 0) })).sort((a, b) => b.sc - a.sc);
+    const best = scores[0], second = scores[1];
+    const clear = best && best.sc >= cards.length && (!second || best.sc >= second.sc * 1.5);
+    p.parentId = clear ? best.m.id : null;
+    p.parentLabel = clear ? best.m.label : null;
+  }
+  return picked.slice(0, 6);
 }
 // Cards, Fach spread and due count for every branch (branches include their sub-branches).
 function treeStats(tt) {
@@ -1349,6 +1457,11 @@ function render() {
   if (state.view === "study" && state.session) app.innerHTML = studyHTML();
   else app.innerHTML = homeHTML();
   if (state.view === "study") $(".study [data-autofocus]")?.focus({ preventScroll: true });
+  if (state.focusNid) {
+    const el = document.querySelector(`.ol-input[data-nid="${state.focusNid}"]`);
+    if (el) { el.focus({ preventScroll: false }); el.setSelectionRange(el.value.length, el.value.length); }
+    state.focusNid = null;
+  }
 }
 
 function homeHTML() {
@@ -1521,7 +1634,7 @@ function topicHTML(t) {
 
 function treeHTML(t) {
   const tt = topicTree(t);
-  if (!tt.root) return `<div class="panel tree-panel"><p>Noch kein Themenbaum. Füge unter <b>„Bearbeiten“</b> eine Gliederung des Themas ein, z. B. aus deinen Vorlesungsnotizen. Die Karten werden dann automatisch den Zweigen zugeordnet.</p></div>`;
+  if (!tt.root) return `<div class="panel tree-panel"><p>Noch kein Themenbaum. Baue unter <b>„Bearbeiten“</b> eine Gliederung des Themas auf oder füge sie als Text ein, z. B. aus deinen Vorlesungsnotizen. Die Karten werden dann automatisch den Zweigen zugeordnet.</p></div>`;
   const stats = treeStats(tt), leaves = treeLeaves(tt.root);
   // The weakest branch: lowest progress among branches with at least 2 cards.
   const weak = leaves.filter(l => stats.get(l.id).cards >= 2).sort((a, b) => stats.get(a.id).pct - stats.get(b.id).pct)[0];
@@ -1542,9 +1655,57 @@ function treeHTML(t) {
     <p class="muted small">${tt.assign.size} von ${tt.entries.length} Karten automatisch zugeordnet, über Begriffe aus dem Baum${unsure ? `. ${unsure} davon passen fast genauso gut zu einem anderen Zweig` : ""}. Die Balken zeigen die Karteikasten-Fächer, der Prozentwert den Fortschritt.</p>
     ${rest.length ? `<details class="tree-rest"><summary>${rest.length} ${rest.length === 1 ? "Karte passt" : "Karten passen"} zu keinem Zweig</summary>
       <p class="muted small">Oft fehlt dafür ein Zweig im Baum. Ergänze ihn unter „Bearbeiten“, dann werden die Karten neu zugeordnet.</p>
+      ${(() => { const sg = suggestBranches(tt, t.outline); return sg.length ? `<p class="small">Vorschläge für neue Zweige: ${sg.map(x => `<b>${esc(x.label)}</b> (${x.hits})`).join(", ")}. <button class="linkish" data-act="topic-edit" data-id="${t.id}">Im Editor hinzufügen</button></p>` : ""; })()}
       <ul class="rest-list">${rest.slice(0, 15).map(e => `<li>${esc(plain(e.c.f).slice(0, 110))}</li>`).join("")}${rest.length > 15 ? `<li class="muted">… und ${rest.length - 15} weitere</li>` : ""}</ul>
     </details>` : ""}
   </div>`;
+}
+
+function outlineEditorHTML(te) {
+  const ol = te.outline;
+  const tt = draftTree(te), stats = tt.root ? treeStats(tt) : new Map();
+  const rows = [];
+  const walk = (list, depth) => list.forEach((n, i) => { rows.push({ n, depth, i, last: i === list.length - 1 }); walk(n.children, depth + 1); });
+  walk(ol.children, 0);
+  const count = id => { const st = stats.get(id); return st ? `${st.cards} ${st.cards === 1 ? "Karte" : "Karten"}` : ""; };
+  return `
+  <div class="field outline-field">
+    <span>Themenbaum <span class="hint">Optional. Ein Zweig pro Zeile, „Autor: Begriffe“ hilft bei der Zuordnung. Enter: nächster Zweig, Tab: einrücken, Shift+Tab: ausrücken.</span></span>
+    <input type="text" id="ol-title" class="ol-title" value="${esc(ol.title || "")}" placeholder="Leitfrage oder Überschrift (optional)" aria-label="Überschrift des Baums">
+    <div class="outline">${rows.map(({ n, depth, i, last }) => `
+      <div class="ol-row" style="--d:${depth}">
+        <span class="ol-dot" aria-hidden="true"></span>
+        <input type="text" class="ol-input" data-nid="${n.id}" value="${esc(n.label)}" placeholder="${depth ? "Unterthema, z. B. Porter: Operative Effizienz" : "Hauptzweig"}" aria-label="Zweig, Ebene ${depth + 1}">
+        <span class="ol-count" data-nid="${n.id}">${count(n.id)}</span>
+        <span class="ol-btns">
+          <button type="button" class="ol-btn" data-act="ol-out" data-nid="${n.id}" title="Ausrücken (Shift+Tab)" aria-label="Ausrücken" ${depth ? "" : "disabled"}>←</button>
+          <button type="button" class="ol-btn" data-act="ol-in" data-nid="${n.id}" title="Einrücken (Tab)" aria-label="Einrücken" ${i ? "" : "disabled"}>→</button>
+          <button type="button" class="ol-btn" data-act="ol-up" data-nid="${n.id}" title="Nach oben (Alt+↑)" aria-label="Nach oben" ${i ? "" : "disabled"}>↑</button>
+          <button type="button" class="ol-btn" data-act="ol-down" data-nid="${n.id}" title="Nach unten (Alt+↓)" aria-label="Nach unten" ${last ? "disabled" : ""}>↓</button>
+          <button type="button" class="ol-btn" data-act="ol-child" data-nid="${n.id}" title="Unterzweig hinzufügen" aria-label="Unterzweig hinzufügen">+</button>
+          <button type="button" class="ol-btn" data-act="ol-del" data-nid="${n.id}" title="Löschen (Unterzweige rücken nach)" aria-label="Löschen">✕</button>
+        </span>
+      </div>`).join("")}
+    </div>
+    <div class="row-actions">
+      <button type="button" class="btn ghost sm" data-act="ol-add">+ Hauptzweig</button>
+      <button type="button" class="btn ghost sm" data-act="ol-text" aria-pressed="${!!te.textOpen}">Als Text einfügen</button>
+      ${tt.root ? `<span class="muted small" id="ol-summary">${tt.assign.size} von ${tt.entries.length} Karten zugeordnet</span>` : ""}
+    </div>
+    ${te.textOpen ? `<div class="ol-paste">
+      <textarea id="topic-tree" rows="7" spellcheck="false" placeholder="Thema&#10;├── 1. Grundlagen&#10;│   └── Porter: Operative Effizienz vs. strategische Position&#10;└── 2. Innovation&#10;    └── Christensen: Disruptive Innovation">${esc(te.pasteText || "")}</textarea>
+      <div class="row-actions"><button type="button" class="btn ghost sm" data-act="ol-text-apply">${ol.children.length ? "Gliederung ersetzen" : "Übernehmen"}</button><span class="hint" id="tree-preview">${treePreviewText(te.pasteText)}</span></div>
+    </div>` : ""}
+    <div id="ol-suggs">${suggestionsHTML(te)}</div>
+  </div>`;
+}
+function suggestionsHTML(te) {
+  const tt = draftTree(te);
+  const sg = te.suggestions = tt.root ? suggestBranches(tt, te.outline) : [];
+  if (!sg.length) return "";
+  return `<div class="suggs"><p class="small"><b>Vorschläge aus Karten ohne Zweig</b></p>${sg.map((x, i) => `
+    <div class="sugg"><b>${esc(x.label)}</b><span>${x.hits} Karten ohne Zweig${x.parentLabel ? ` · passt unter „${esc(x.parentLabel)}“` : ""}</span>
+      <button type="button" class="btn ghost sm" data-act="ol-sugg" data-i="${i}">Als Zweig hinzufügen</button></div>`).join("")}</div>`;
 }
 
 function topicEditHTML() {
@@ -1552,10 +1713,7 @@ function topicEditHTML() {
   return `
   <div class="panel topic-edit">
     <label class="field">Name des Themas<input type="text" id="topic-name" value="${esc(te.name)}" maxlength="80" placeholder="z. B. Digitale Innovationsstrategie"></label>
-    <label class="field">Themenbaum <span class="hint">Optional. Eine Gliederung als Baum (├── └──) oder eingerückte Liste. Pro Zeile ein Zweig, „Autor: Begriffe“ hilft bei der Zuordnung.</span>
-      <textarea id="topic-tree" rows="8" spellcheck="false" placeholder="Thema&#10;├── 1. Grundlagen&#10;│   └── Porter: Operative Effizienz vs. strategische Position&#10;└── 2. Innovation&#10;    └── Christensen: Disruptive Innovation">${esc(te.tree || "")}</textarea>
-      <span class="hint" id="tree-preview">${treePreviewText(te.tree)}</span>
-    </label>
+    ${outlineEditorHTML(te)}
     <fieldset class="deck-picks"><legend>Kartensets in diesem Thema</legend>
       ${state.decks.length ? state.decks.map(d => {
         const other = d.topic && d.topic !== te.id && topicById(d.topic);
@@ -1844,6 +2002,57 @@ function doneHTML(s) {
   </div>`;
 }
 
+/* Outline editing: every change works on the draft, saved with "Speichern" */
+const blankNode = () => ({ id: rid(), label: "", children: [] });
+function findNode(list, id, parent = null) {
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].id === id) return { node: list[i], list, index: i, parent };
+    const r = findNode(list[i].children, id, list[i]);
+    if (r) return r;
+  }
+  return null;
+}
+function outlineOp(op, id) {
+  const te = state.topicEdit; if (!te) return;
+  const root = te.outline.children, f = id ? findNode(root, id) : null;
+  let focus = id;
+  if (op === "add") { const n = blankNode(); root.push(n); focus = n.id; }
+  else if (!f) return;
+  else if (op === "after") { const n = blankNode(); f.list.splice(f.index + 1, 0, n); focus = n.id; }
+  else if (op === "child") { const n = blankNode(); f.node.children.push(n); focus = n.id; }
+  else if (op === "in" && f.index > 0) { f.list.splice(f.index, 1); f.list[f.index - 1].children.push(f.node); }
+  else if (op === "out" && f.parent) {
+    const pf = findNode(root, f.parent.id);
+    f.list.splice(f.index, 1); pf.list.splice(pf.index + 1, 0, f.node);
+  }
+  else if (op === "up" && f.index > 0) { [f.list[f.index - 1], f.list[f.index]] = [f.list[f.index], f.list[f.index - 1]]; }
+  else if (op === "down" && f.index < f.list.length - 1) { [f.list[f.index + 1], f.list[f.index]] = [f.list[f.index], f.list[f.index + 1]]; }
+  else if (op === "del") {
+    // Deleting keeps the sub-branches: they move up into the gap.
+    const prev = f.index > 0 ? f.list[f.index - 1] : f.parent;
+    f.list.splice(f.index, 1, ...f.node.children);
+    focus = f.node.children[0]?.id || prev?.id || null;
+  }
+  state.focusNid = focus;
+  render();
+}
+let olTimer = 0;
+// Typing only updates the counts and suggestions, so the cursor stays where it is.
+function refreshOutlineInfo() {
+  const te = state.topicEdit; if (!te) return;
+  const tt = draftTree(te), stats = tt.root ? treeStats(tt) : new Map();
+  document.querySelectorAll(".ol-count").forEach(el => { const st = stats.get(el.dataset.nid); el.textContent = st ? `${st.cards} ${st.cards === 1 ? "Karte" : "Karten"}` : ""; });
+  const sum = $("#ol-summary"); if (sum && tt.root) sum.textContent = `${tt.assign.size} von ${tt.entries.length} Karten zugeordnet`;
+  const box = $("#ol-suggs"); if (box) box.innerHTML = suggestionsHTML(te);
+}
+const cloneOutline = o => o ? JSON.parse(JSON.stringify(o)) : { title: "", children: [] };
+// Drops unnamed branches (their sub-branches move up) before saving.
+function cleanOutline(o) {
+  const clean = list => list.flatMap(n => n.label.trim() ? [{ id: n.id, label: n.label.trim(), children: clean(n.children) }] : clean(n.children));
+  const children = clean(o.children);
+  return children.length ? { title: (o.title || "").trim(), children } : null;
+}
+
 function treePreviewText(text) {
   const root = parseTree(text);
   if (!root) return "";
@@ -1857,8 +2066,27 @@ document.addEventListener("click", e => {
   const id = b.dataset.id, act = b.dataset.act;
   if (act === "study") startStudy(id);
   else if (act === "study-topic") startTopic(id);
-  else if (act === "topic-new") { state.topicEdit = state.topicEdit && !state.topicEdit.id ? null : { id: null, name: "", tree: "", deckIds: new Set(state.decks.filter(d => !d.topic || !topicById(d.topic)).map(d => d.id)), confirmDelete: false }; render(); $("#topic-name")?.focus(); }
-  else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, tree: t.tree || "", deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false }; render(); }
+  else if (act === "topic-new") { state.topicEdit = state.topicEdit && !state.topicEdit.id ? null : { id: null, name: "", outline: cloneOutline(null), deckIds: new Set(state.decks.filter(d => !d.topic || !topicById(d.topic)).map(d => d.id)), confirmDelete: false }; render(); $("#topic-name")?.focus(); }
+  else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, outline: cloneOutline(t.outline), deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false }; render(); }
+  else if (act?.startsWith("ol-") && state.topicEdit) {
+    const te = state.topicEdit, nid = b.dataset.nid;
+    if (act === "ol-add") outlineOp("add");
+    else if (act === "ol-text") { te.textOpen = !te.textOpen; render(); $("#topic-tree")?.focus(); }
+    else if (act === "ol-text-apply") {
+      const o = outlineFromText(te.pasteText);
+      if (!o) { toast("Im Text wurde keine Gliederung erkannt."); return; }
+      te.outline = o; te.textOpen = false; te.pasteText = ""; render();
+    }
+    else if (act === "ol-sugg") {
+      const sg = te.suggestions?.[+b.dataset.i]; if (!sg) return;
+      const n = { id: rid(), label: sg.label, children: [] };
+      const target = sg.parentId && findNode(te.outline.children, sg.parentId);
+      (target ? target.node.children : te.outline.children).push(n);
+      toast(`Zweig „${sg.label}“ hinzugefügt${target ? ` unter „${target.node.label}“` : ""}.`);
+      state.focusNid = n.id; render();
+    }
+    else outlineOp(act.slice(3), nid);
+  }
   else if (act === "topic-tree") { state.treeOpen = state.treeOpen === id ? null : id; if (state.topicEdit?.id === id) state.topicEdit = null; render(); }
   else if (act === "topic-cancel") { state.topicEdit = null; render(); }
   else if (act === "topic-del") { state.topicEdit.confirmDelete = true; render(); }
@@ -1874,8 +2102,8 @@ document.addEventListener("click", e => {
     if (!name) { toast("Gib dem Thema einen Namen."); $("#topic-name")?.focus(); return; }
     let t = te.id && topicById(te.id);
     if (t) t.name = name; else { t = { id: rid(), name, created: Date.now() }; state.topics.push(t); }
-    t.tree = (te.tree || "").trim();
-    if (t.tree) state.treeOpen = t.id;
+    t.outline = cleanOutline(te.outline); delete t.tree;
+    if (t.outline) state.treeOpen = t.id;
     for (const d of state.decks) {
       const want = te.deckIds.has(d.id) ? t.id : (d.topic === t.id ? null : d.topic);
       if ((d.topic || null) !== (want || null)) { d.topic = want; markMeta(d); }
@@ -1937,7 +2165,12 @@ document.addEventListener("input", e => {
   const t = e.target;
   if (t.id === "imp-name" && state.draft) state.draft.name = t.value;
   if (t.id === "topic-name" && state.topicEdit) state.topicEdit.name = t.value;
-  if (t.id === "topic-tree" && state.topicEdit) { state.topicEdit.tree = t.value; const pv = $("#tree-preview"); if (pv) pv.textContent = treePreviewText(t.value); }
+  if (t.id === "topic-tree" && state.topicEdit) { state.topicEdit.pasteText = t.value; const pv = $("#tree-preview"); if (pv) pv.textContent = treePreviewText(t.value); }
+  if (t.id === "ol-title" && state.topicEdit) state.topicEdit.outline.title = t.value;
+  if (t.classList?.contains("ol-input") && state.topicEdit) {
+    const f = findNode(state.topicEdit.outline.children, t.dataset.nid);
+    if (f) { f.node.label = t.value; clearTimeout(olTimer); olTimer = setTimeout(refreshOutlineInfo, 350); }
+  }
   if (t.id === "set-ret") { const o = $("#ret-out"); if (o) o.textContent = t.value + " %"; }
 });
 document.addEventListener("dragover", e => { if (state.view !== "home") return; e.preventDefault(); $("#drop")?.classList.add("over"); });
@@ -1954,6 +2187,16 @@ document.addEventListener("paste", e => {
   const t = e.clipboardData?.getData("text/plain") || "";
   if (!/[\t;,|]/.test(t) || !t.trim()) return;
   e.preventDefault(); openImportText(t, "Eingefügter Text");
+});
+document.addEventListener("keydown", e => {
+  const t = e.target;
+  if (!t.classList?.contains("ol-input") || !state.topicEdit) return;
+  const id = t.dataset.nid;
+  if (e.key === "Enter") { e.preventDefault(); outlineOp("after", id); }
+  else if (e.key === "Tab") { e.preventDefault(); outlineOp(e.shiftKey ? "out" : "in", id); }
+  else if (e.key === "Backspace" && !t.value) { e.preventDefault(); outlineOp("del", id); }
+  else if (e.altKey && e.key === "ArrowUp") { e.preventDefault(); outlineOp("up", id); }
+  else if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); outlineOp("down", id); }
 });
 document.addEventListener("keydown", e => {
   if (state.view !== "study" || !state.session) return;
@@ -1998,6 +2241,8 @@ async function loadAll() {
   const today = dayKey();
   const [profile, log, topics] = await withTimeout(Promise.all([state.store.getDoc("profile"), state.store.getDoc("log-" + today), state.store.getDoc("topics")]), 10000);
   state.topics = Array.isArray(topics?.list) ? topics.list : [];
+  // Trees pasted before the editor existed were stored as text: turn them into an outline with ids.
+  for (const t of state.topics) if (!t.outline && t.tree) { t.outline = outlineFromText(t.tree); delete t.tree; }
   state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) }, badges: { ...(profile?.badges || {}) } };
   state.log = { day: today, entries: Array.isArray(log?.entries) ? log.entries : [] };
   // Before history existed: count today's answers from the decks.
