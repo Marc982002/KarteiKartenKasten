@@ -40,3 +40,7 @@ Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.d
 - `public/index.html`: die komplette App (Import, Lernen, Statistik, Einstellungen).
 - `node_modules/ts-fsrs`: der Lernalgorithmus, wird vom Server unter `/vendor/ts-fsrs.js` ausgeliefert. Fehlt er, nutzt die App eine eingebaute FSRS-5-Version.
 - `artifact/karteikasten.html`: die frühere Version als Claude-Artefakt. Sie speichert im Claude-Konto statt lokal und wird vom Server nicht genutzt.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE).
