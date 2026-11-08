@@ -49,6 +49,17 @@ Steht hinter einem Begriff eine Übersetzung in Klammern, reicht eins von beiden
 
 Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt die App nicht. Die Bewertung ist deshalb immer nur ein Vorschlag.
 
+## Mehr neue Karten als das Tageslimit
+
+Das Tageslimit schützt vor allem die nächsten Tage, denn jede neue Karte bringt später Wiederholungen. Läuft es heute gut, bietet die App deshalb weitere neue Karten an, in Päckchen zu 5:
+
+- **Wann:** Die regulären neuen Karten von heute sind dran gewesen, keine Wiederholung ist mehr offen, und mindestens drei Viertel der heutigen neuen Karten haben die Lernphase verlassen. Das Angebot erscheint in der Lernrunde über der Karte, auf dem Abschlussbildschirm und an Stapel oder Thema als „5 weitere neue“.
+- **Bremse:** Kein Angebot, wenn du bei den Wiederholungen der heutigen neuen Karten unter 70 % gewusst hast (gezählt ab 6 Wiederholungen) oder wenn du heute schon doppelt so viele neue Karten wie dein Tageslimit hast. Der Abschlussbildschirm sagt dann, warum.
+- **Preis:** Neben dem Knopf steht, wie viele Wiederholungen das Päckchen etwa in den nächsten 7 Tagen bringt. Grundlage ist dein eigener Verlauf, oder eine Simulation, solange der Verlauf noch zu kurz ist.
+- **Einstreuen:** Die neuen Karten kommen zwischen die Karten, die gerade in der Lernphase sind. Gehört der Stapel zu einem Thema mit Themenbaum, kommen sie abwechselnd aus verschiedenen Zweigen (bei Themen ohne Baum aus verschiedenen Sets), damit Ähnliches nicht direkt nacheinander kommt.
+
+Hintergrund: Erst sollen neue Karten einige Male sicher abgerufen werden, dann zählt vor allem das verteilte Wiederholen (Rawson & Dunlosky 2011). Wie groß ein Päckchen ist, macht wenig aus, solange die Abstände stimmen (Nakata & Webb 2016). Bedeutungsähnliches stört sich gegenseitig, wenn es zusammen gelernt wird. Die Schwellen 75 %, 70 % und „doppelt“ sind begründete Startwerte und lassen sich anhand des Verlaufs anpassen.
+
 ## Karten bearbeiten
 
 Unter **„Karten“** an jedem Stapel siehst du alle Karten mit ihrem Fach. Du kannst sie durchsuchen, bearbeiten, löschen, einzeln hinzufügen und aussetzen. Beim Bearbeiten bleibt der Lernstand erhalten. Wer die Frage stark umschreibt, kann ihn per Häkchen zurücksetzen.

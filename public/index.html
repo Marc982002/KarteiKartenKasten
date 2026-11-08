@@ -129,6 +129,8 @@ textarea.ce-input{font:inherit;font-size:16px;min-height:0;line-height:1.45}
 .ce-note{margin:0;color:var(--again)}
 .leech-note{border:2px dashed var(--again);border-radius:var(--radius);padding:10px 14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .foot-links{display:flex;gap:16px;flex-wrap:wrap}
+.extra-offer{border:2px solid var(--good);border-radius:var(--radius);padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.extra-offer p{margin:0}
 .restore-confirm{border:2px solid var(--again);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .restore-confirm p{margin:0}
 .warn-text{color:var(--hard);font-weight:700}
@@ -629,7 +631,7 @@ const dec = a => Array.isArray(a) ? { q: a[0], s: a[1], d: a[2], due: a[3], last
 // m: when the card's text or suspension last changed (to merge edits from two devices).
 const toRow = c => { const r = { i: c.i, f: c.f, b: c.b, sf: enc(c.sf), sr: enc(c.sr) }; if (c.x) r.x = 1; if (c.m) r.m = c.m; return r; };
 const fromRow = r => { const c = { i: r.i, f: r.f, b: r.b, sf: dec(r.sf), sr: dec(r.sr), c: r._k || 0, x: !!r.x }; if (r.m) c.m = r.m; return c; };
-const META_KEYS = ["id", "name", "created", "dir", "newPerDay", "retention", "newDay", "newCount", "revDay", "revCount", "chunks", "cardCount", "mode", "topic"];
+const META_KEYS = ["id", "name", "created", "dir", "newPerDay", "retention", "newDay", "newCount", "revDay", "revCount", "chunks", "cardCount", "mode", "topic", "bonusDay", "bonus"];
 const metaOf = deck => { const m = { kind: "deck" }; for (const k of META_KEYS) m[k] = deck[k] ?? null; return m; };
 const clone = x => JSON.parse(JSON.stringify(x));
 
@@ -824,7 +826,10 @@ function rollover(deck) {
   const t = dayKey();
   if (deck.newDay !== t) { deck.newDay = t; deck.newCount = 0; }
   if (deck.revDay !== t) { deck.revDay = t; deck.revCount = 0; }
+  if (deck.bonusDay !== t) { deck.bonusDay = t; deck.bonus = 0; }
 }
+// Extra new cards allowed today on top of the daily limit (see "Extra new cards").
+const bonusToday = d => d.bonusDay === dayKey() ? d.bonus || 0 : 0;
 
 /* ---------- Topics: several card sets about one subject ---------- */
 const topicById = id => state.topics.find(t => t.id === id);
@@ -1082,12 +1087,12 @@ function buildQueue(deck) {
     if (!card["s" + dirs[0]]) fresh.push({ card, dir: dirs[0], deck });
     else if (dirs.length > 1 && !card["s" + dirs[1]] && card["s" + dirs[0]].last < sod) fresh.push({ card, dir: dirs[1], deck });
   }
-  const newLeft = Math.max(0, (deck.newPerDay ?? 20) - (deck.newCount || 0));
+  const newLeft = Math.max(0, (deck.newPerDay ?? 20) + bonusToday(deck) - (deck.newCount || 0));
   const newPick = fresh.slice(0, newLeft);
   rev.sort((a, b) => a.pri - b.pri);
   learn.sort((a, b) => ust(a).due - ust(b).due);
   const main = mixQueue(rev, newPick);
-  return { main, learn, rev, fresh: newPick, nRev: rev.length, nNew: newPick.length, nLearn: learn.length, unseen: fresh.length - newPick.length };
+  return { main, learn, rev, fresh: newPick, allFresh: fresh, nRev: rev.length, nNew: newPick.length, nLearn: learn.length, unseen: fresh.length - newPick.length };
 }
 
 /* ---------- Daily goal, streak, answer history ---------- */
@@ -1447,11 +1452,126 @@ function dontKnow() {
   markAnswered(s); s.revealed = true; render();
 }
 
+/* ---------- Extra new cards: keep going once today's new cards sit ----------
+   The daily limit mainly protects the coming days (every new card brings reviews later).
+   So more new cards are offered in packs of 5 once three quarters of today's new cards
+   have left the learning phase (Rawson & Dunlosky: first reach a recall criterion, then space),
+   and not when learning is going badly today or today's new cards already doubled the limit.
+   New cards are spread between the cards in learning, and taken from different branches or sets
+   in turn, so similar items do not come back to back (interference). */
+const EXTRA = { pack: 5, readyShare: 0.75, minHitRate: 0.7, minTries: 6 };
+// Today's new cards of these decks: how many started, how many learned, and how the repeats in the learning phase went.
+function todayNewStats(decks) {
+  const today = dayKey();
+  let started = 0, learned = 0, tries = 0, hits = 0;
+  for (const d of decks) for (const c of state.cards[d.id] || []) if (!c.x) for (const dir of dirsOf(d)) {
+    const list = state.attempts.get(c.i + ":" + dir);
+    if (!list?.length || dayKey(list[0][3]) !== today) continue;
+    started++;
+    if (c["s" + dir]?.q === 2) learned++;
+    for (const e of list.slice(1)) { tries++; if (e[2] >= 2) hits++; }
+  }
+  return { started, learned, tries, hits, hitRate: tries >= EXTRA.minTries ? hits / tries : null };
+}
+// Whether more new cards can be offered. null: nothing to offer at all (no unseen cards, new cards switched off).
+function extraOffer(decks) {
+  const qs = decks.map(buildQueue);
+  const open = decks.filter((d, i) => (d.newPerDay ?? 20) > 0 && qs[i].unseen > 0);
+  if (!open.length || qs.some(q => q.nNew > 0)) return null; // today's regular new cards come first
+  const st = todayNewStats(decks);
+  const room = open.reduce((a, d) => a + Math.max(0, (d.newPerDay ?? 20) - bonusToday(d)), 0);
+  const unseen = open.reduce((a, d) => a + qs[decks.indexOf(d)].unseen, 0);
+  if (!room) return { ok: false, reason: "double", ...st };
+  if (st.hitRate != null && st.hitRate < EXTRA.minHitRate) return { ok: false, reason: "hard", ...st };
+  if (st.started && st.learned / st.started < EXTRA.readyShare) return { ok: false, reason: "wait", ...st };
+  return { ok: true, n: Math.min(EXTRA.pack, room, unseen), ...st };
+}
+// Reviews a new card brings in the next 7 days: from your own history if there is enough, else simulated with "Gut".
+function reviewsPerNewCard(decks) {
+  const now = Date.now(), ids = new Set(decks.map(d => d.id));
+  let units = 0, reviews = 0;
+  for (const list of state.attempts.values()) {
+    if (!list.length || !ids.has(list[0][4])) continue;
+    const first = list[0][3], age = (now - first) / DAY;
+    if (age < 8 || age > 90) continue;
+    const day0 = new Date(first); day0.setHours(24, 0, 0, 0);
+    units++; reviews += list.filter(e => e[3] >= day0.getTime() && e[3] < day0.getTime() + 7 * DAY).length;
+  }
+  if (units >= 10) return reviews / units;
+  // Not enough history yet: simulate, forgetting as often as in today's learning phase (15 % without data).
+  const ret = decks[0]?.retention || 0.9, miss = 1 - (todayNewStats(decks).hitRate ?? 0.85);
+  const key = ret + ":" + miss.toFixed(2) + ":" + dayKey();
+  if (costCache.has(key)) return costCache.get(key);
+  const eod = endOfToday(), end = eod + 7 * DAY, runs = 20;
+  let total = 0;
+  for (let r = 0; r < runs; r++) {
+    let st = outcomes(null, now, ret)[2];
+    for (let i = 0; i < 40 && st.due < end; i++) { if (st.due >= eod) total++; st = outcomes(st, st.due, ret)[Math.random() < miss ? 0 : 2]; }
+  }
+  costCache.set(key, total / runs);
+  return total / runs;
+}
+const costCache = new Map();
+// Which cards a branch of the topic tree covers, so a pack can take turns between branches (or sets).
+function groupKeyFor(decks) {
+  const node = new Map();
+  for (const t of state.topics) if (t.outline && decks.some(d => d.topic === t.id)) {
+    const tt = topicTree(t);
+    if (tt?.root) for (const [cid, a] of tt.assign) node.set(cid, a.node);
+  }
+  return u => node.has(u.card.i) ? "b:" + node.get(u.card.i) : "d:" + u.deck.id;
+}
+function pickExtra(decks, n) {
+  const s = state.session, taken = new Set();
+  if (s) for (const u of [...s.main, ...s.learn, s.current].filter(Boolean)) taken.add(ukey(u));
+  const room = new Map(decks.map(d => [d.id, Math.max(0, (d.newPerDay ?? 20) - bonusToday(d))]));
+  const key = groupKeyFor(decks), groups = new Map();
+  for (const d of decks) for (const u of buildQueue(d).allFresh) if (!taken.has(ukey(u))) {
+    const k = key(u); (groups.get(k) || groups.set(k, []).get(k)).push(u);
+  }
+  const lists = [...groups.values()], out = [];
+  while (out.length < n && lists.some(l => l.length)) {
+    for (const l of lists) {
+      while (l.length && !room.get(l[0].deck.id)) l.shift();
+      if (!l.length || out.length >= n) continue;
+      const u = l.shift(); out.push(u); room.set(u.deck.id, room.get(u.deck.id) - 1);
+    }
+  }
+  for (const u of out) { rollover(u.deck); u.deck.bonus = (u.deck.bonus || 0) + 1; markMeta(u.deck); }
+  return out;
+}
+// Text for the offer: what is possible, or why not right now.
+function extraOfferHTML(off, decks, { inline = false } = {}) {
+  if (!off) return "";
+  if (off.ok) {
+    const cost = Math.round(off.n * reviewsPerNewCard(decks));
+    return `<div class="extra-offer ${inline ? "inline" : ""}" role="status">
+      <p><b>${off.learned} von ${off.started} neuen Karten sitzen.</b> Du kannst ${off.n} weitere aufnehmen${cost ? `. Das bringt etwa ${cost} Wiederholungen in den nächsten 7 Tagen` : ""}.</p>
+      <div class="row-actions"><button class="btn primary sm" data-act="extra-new">${off.n} neue Karten aufnehmen</button>${inline ? `<button class="btn ghost sm" data-act="extra-no">Nicht jetzt</button>` : ""}</div>
+    </div>`;
+  }
+  if (inline) return "";
+  const why = off.reason === "double" ? "Heute hast du schon doppelt so viele neue Karten wie dein Tageslimit. Mehr auf einmal macht die nächsten Tage schwer."
+    : off.reason === "hard" ? `Bei den Wiederholungen deiner neuen Karten hast du heute ${pct(off.hitRate)} gewusst. Ab 70 % geht es weiter, sonst lieber morgen, wenn sich das gesetzt hat.`
+    : `${off.learned} von ${off.started} neuen Karten sitzen schon. Sobald es drei Viertel sind, kannst du weitere aufnehmen.`;
+  return `<p class="muted small">${why}</p>`;
+}
+function addExtraNew() {
+  const s = state.session; if (!s) return;
+  const decks = s.deckIds.map(deckById).filter(Boolean), off = extraOffer(decks);
+  if (!off?.ok) { render(); return; }
+  const units = pickExtra(decks, off.n);
+  s.main.push(...units); // once these sit too, the next pack is offered again
+  if (s.finished || !s.current) { s.finished = false; advance(); }
+  toast(units.length + " neue Karten aufgenommen. Sie kommen zwischen die Karten, die du gerade lernst.");
+  render();
+}
+
 /* ---------- Session ---------- */
 // Before a round: pick up what another device did, so no card comes twice.
-async function startStudy(id) { await pullChanges({ quiet: true }); const deck = deckById(id); if (deck) startSession([deck], deck.name); }
-async function startTopic(id) { await pullChanges({ quiet: true }); const t = topicById(id); if (t) startSession(decksOfTopic(id), t.name, id); }
-function startSession(decks, title, topicId = null) {
+async function startStudy(id, extra = false) { await pullChanges({ quiet: true }); const deck = deckById(id); if (deck) startSession([deck], deck.name, null, { extra }); }
+async function startTopic(id, extra = false) { await pullChanges({ quiet: true }); const t = topicById(id); if (t) startSession(decksOfTopic(id), t.name, id, { extra }); }
+function startSession(decks, title, topicId = null, { extra = false } = {}) {
   const qs = decks.map(buildQueue);
   const rev = qs.flatMap(q => q.rev).sort((a, b) => a.pri - b.pri);
   const learn = qs.flatMap(q => q.learn).sort((a, b) => ust(a).due - ust(b).due);
@@ -1459,9 +1579,10 @@ function startSession(decks, title, topicId = null) {
   const lists = qs.map(q => q.fresh.slice()), fresh = [];
   while (lists.some(l => l.length)) for (const l of lists) if (l.length) fresh.push(l.shift());
   const main = mixQueue(rev, fresh);
-  if (!main.length && !learn.length) { toast(decks.length > 1 ? "In diesem Thema ist heute nichts mehr fällig." : "In diesem Stapel ist heute nichts mehr fällig."); return; }
+  if (!main.length && !learn.length && !(extra && extraOffer(decks)?.ok)) { toast(decks.length > 1 ? "In diesem Thema ist heute nichts mehr fällig." : "In diesem Stapel ist heute nichts mehr fällig."); return; }
   state.session = { deckIds: decks.map(d => d.id), title, topicId, main, learn, current: null, revealed: false, done: 0, first: new Map(), history: [], lastKey: null, started: Date.now(), finished: false, startFach: new Map(), lastMove: null, badges: [] };
   state.view = "study"; state.open = null;
+  if (!main.length && !learn.length) state.session.main.push(...pickExtra(decks, extraOffer(decks).n));
   advance(); render();
 }
 function nextUnit(s) {
@@ -1857,7 +1978,11 @@ function topicHTML(t) {
         ${masteryBar(progressOf(decks), "Thema")}
       </div>
       <div class="deck-actions">
-        <button class="btn ${nothing ? "ghost" : "primary"}" data-act="study-topic" data-id="${t.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Thema lernen"}</button>
+        ${(() => {
+          const off = nothing ? extraOffer(decks) : null;
+          return off?.ok ? `<button class="btn ghost" data-act="study-topic" data-extra="1" data-id="${t.id}" title="Die heutigen neuen Karten sitzen schon gut">${off.n} weitere neue</button>`
+            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study-topic" data-id="${t.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Thema lernen"}</button>`;
+        })()}
         <button class="btn ghost" data-act="topic-tree" data-id="${t.id}" aria-pressed="${state.treeOpen === t.id}">Themenbaum</button>
         <button class="btn ghost" data-act="topic-edit" data-id="${t.id}" aria-pressed="${editing}">Bearbeiten</button>
       </div>
@@ -2019,7 +2144,11 @@ function deckHTML(deck) {
         ${masteryHTML(deck)}
       </div>
       <div class="deck-actions">
-        <button class="btn ${nothing ? "ghost" : "primary"}" data-act="study" data-id="${deck.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Lernen"}</button>
+        ${(() => {
+          const off = nothing ? extraOffer([deck]) : null;
+          return off?.ok ? `<button class="btn ghost" data-act="study" data-extra="1" data-id="${deck.id}" title="Die heutigen neuen Karten sitzen schon gut">${off.n} weitere neue</button>`
+            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study" data-id="${deck.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Lernen"}</button>`;
+        })()}
         <button class="btn ghost" data-act="tab" data-tab="cards" data-id="${deck.id}" aria-pressed="${open === "cards"}">Karten</button>
         <button class="btn ghost" data-act="tab" data-tab="stats" data-id="${deck.id}" aria-pressed="${open === "stats"}">Statistik</button>
         <button class="btn ghost" data-act="tab" data-tab="settings" data-id="${deck.id}" aria-pressed="${open === "settings"}">Einstellungen</button>
@@ -2293,6 +2422,8 @@ function applyMeta(deck, r, pull) {
   for (const [day, count] of [["newDay", "newCount"], ["revDay", "revCount"]]) {
     if ((r[day] || "") > (deck[day] || "")) { deck[day] = r[day]; deck[count] = r[count] || 0; }
   }
+  if ((r.bonusDay || "") > (deck.bonusDay || "")) { deck.bonusDay = r.bonusDay; deck.bonus = r.bonus || 0; }
+  else if (r.bonusDay && r.bonusDay === deck.bonusDay) deck.bonus = Math.max(deck.bonus || 0, r.bonus || 0);
   if (pull) {
     const n = normDeck(r);
     for (const k of ["name", "dir", "mode", "newPerDay", "retention", "topic", "created"]) deck[k] = n[k] ?? null;
@@ -2584,6 +2715,7 @@ function studyHTML() {
       </div>
     </div>
     <div class="progress" aria-hidden="true"><i style="width:${(prog * 100).toFixed(1)}%"></i></div>
+    ${!s.revealed && !s.main.length && !s.offerOff ? (() => { const ds = s.deckIds.map(deckById).filter(Boolean); return extraOfferHTML(extraOffer(ds), ds, { inline: true }); })() : ""}
     ${s.stamp && !s.revealed ? `<div class="stamp ${s.stamp.kind}" role="status"><b>${esc(s.stamp.title)}</b><span>Letzte Karte: ${esc(s.stamp.text)}</span></div>` : ""}
     <article class="card ${flipTap ? "tap" : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
       <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span><span>${esc(info)}</span></div>
@@ -2615,7 +2747,7 @@ function doneHTML(s) {
   let tomorrow = 0;
   for (const deck of decks) for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; if (st && (isLearning(st) || st.due <= eod + DAY)) tomorrow++; }
   const qs = decks.map(buildQueue);
-  const unseen = qs.reduce((a, q) => a + q.unseen, 0), newTomorrow = decks.reduce((a, d, i) => a + (qs[i].unseen + qs[i].nNew > 0 ? (d.newPerDay ?? 20) : 0), 0);
+  const newTomorrow = decks.reduce((a, d, i) => a + (qs[i].unseen + qs[i].nNew > 0 ? (d.newPerDay ?? 20) : 0), 0);
   let up = 0, down = 0;
   for (const { u, from } of s.startFach.values()) { const to = fachOf(ust(u)); if (to > from) up++; else if (to < from) down++; }
   return `
@@ -2627,10 +2759,11 @@ function doneHTML(s) {
       ${up || down ? `<p>${up} ${up === 1 ? "Karte" : "Karten"} in ein höheres Fach gerückt${down ? `, ${down} zurückgefallen` : ""}. ${(() => { const p = progressOf(decks); return `Fortschritt ${many ? "im Thema" : "im Stapel"}: <b>${p.pct} %</b>${p.tier ? ` (${p.tier.name})` : ""}.`; })()}</p>` : ""}
       ${s.badges.length ? `<p>Neue Abzeichen: <b>${s.badges.map(b => esc(b.name)).join(", ")}</b>.</p>` : ""}
       <p>${(() => { const st = streakInfo(); return st.todayOk ? `Tagesziel erreicht (${st.today}/${state.profile.goal}). Serie: <b>${st.n} ${st.n === 1 ? "Tag" : "Tage"}</b>.` : `Tagesziel: ${st.today}/${state.profile.goal} Antworten. Noch ${state.profile.goal - st.today} in einem anderen Stapel, oder hol dir 10 neue Karten.`; })()}</p>
+      ${extraOfferHTML(extraOffer(decks), decks)}
       <p class="muted">Morgen warten etwa ${tomorrow} Wiederholungen${newTomorrow > 0 ? ` und bis zu ${newTomorrow} neue Karten` : ""}. Am meisten bringt es, jeden Tag kurz zu lernen.</p>
       <div class="row-actions">
         <button class="btn primary" data-act="exit" data-autofocus>Zur Übersicht</button>
-        ${unseen > 0 ? `<button class="btn ghost" data-act="more-new">10 weitere neue Karten${many ? " je Set" : ""}</button>` : ""}
+
       </div>
     </div>
   </div>`;
@@ -2698,8 +2831,10 @@ function treePreviewText(text) {
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
-  if (act === "study") startStudy(id);
-  else if (act === "study-topic") startTopic(id);
+  if (act === "study") startStudy(id, b.dataset.extra === "1");
+  else if (act === "study-topic") startTopic(id, b.dataset.extra === "1");
+  else if (act === "extra-new") addExtraNew();
+  else if (act === "extra-no") { if (state.session) { state.session.offerOff = true; render(); } }
   else if (act === "topic-new") { state.topicEdit = state.topicEdit && !state.topicEdit.id ? null : { id: null, name: "", outline: cloneOutline(null), deckIds: new Set(state.decks.filter(d => !d.topic || !topicById(d.topic)).map(d => d.id)), confirmDelete: false }; render(); $("#topic-name")?.focus(); }
   else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, outline: cloneOutline(t.outline), deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false }; render(); }
   else if (act?.startsWith("ol-") && state.topicEdit) {
@@ -2820,12 +2955,6 @@ document.addEventListener("click", e => {
   else if (act === "restore-yes") doRestore();
   else if (act === "restore-no") { state.restore = null; render(); }
   else if (act === "csv") { const deck = deckById(id); if (deck) exportCSV(deck); }
-  else if (act === "more-new") {
-    const s = state.session; if (!s) return;
-    const decks = s.deckIds.map(deckById).filter(Boolean);
-    for (const d of decks) if (buildQueue(d).unseen > 0) { d.newCount = (d.newCount || 0) - 10; markMeta(d); }
-    startSession(decks, s.title, s.topicId);
-  }
 });
 document.addEventListener("change", e => {
   const t = e.target, d = state.draft;
