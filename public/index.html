@@ -339,6 +339,20 @@ th{background:transparent;font-family:var(--font-hand);text-transform:none;lette
 .rest-list{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px;font-size:14px}
 @media (max-width:600px){.node{grid-template-columns:minmax(0,1fr)}.node-meta{white-space:normal}.tree ul{padding-left:12px}}
 
+/* Card lists in the tree: move a card to another branch */
+.node-toggle{grid-column:1/-1;justify-self:start;font-size:13px}
+.cardlist,.tree ul.cardlist{list-style:none;margin:4px 0 6px;padding:0 0 0 14px;border-left:2px dotted var(--line);display:flex;flex-direction:column}
+.tree ul.cardlist>li::before,.tree ul.cardlist>li::after{display:none}
+.cardrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line)}
+.cr-text{font-size:14px;line-height:1.35;min-width:0;overflow-wrap:anywhere}
+.cr-tag{font-size:11.5px;font-weight:700;color:var(--accent);border:1.5px solid currentColor;border-radius:var(--wobble);padding:0 7px;white-space:nowrap}
+.cr-tag.unsure{color:var(--hard)}
+select.reassign{width:auto;max-width:240px;min-height:32px;font-size:14px;padding:2px 6px}
+.cr-pick{display:flex;gap:6px;flex-wrap:wrap;grid-column:2/-1;justify-content:flex-end}
+.tree-sec{display:flex;flex-direction:column;gap:6px}
+.sec-toggle{font-family:var(--font-hand);font-size:16px;font-weight:700;justify-self:start;text-align:left}
+@media (max-width:600px){.cardrow{grid-template-columns:minmax(0,1fr) auto}.cardrow select.reassign{grid-column:1/-1;max-width:100%;width:100%}.cr-pick{grid-column:1/-1;justify-content:flex-start}}
+
 /* Outline editor */
 .outline-field{gap:8px}
 input[type=text].ol-title{font-family:var(--font-display);font-size:24px;font-weight:700;color:var(--accent);border:0;border-bottom:1.5px dashed var(--line);border-radius:0;padding:2px 4px;background:transparent}
@@ -685,7 +699,8 @@ const state = {
   topics: [],                      // [{ id, name, created }]; a deck links to one via deck.topic
   topicEdit: null,                 // { id | null, name, deckIds: Set, confirmDelete } while the topic panel is open
   lastTopic: "",
-  treeOpen: null                   // topic id whose tree panel is open
+  treeOpen: null,                  // topic id whose tree panel is open
+  treeExpanded: new Set()          // open card lists in the tree view (branch ids, "rest", "unsure")
 };
 const deckById = id => state.decks.find(d => d.id === id);
 const dirsOf = deck => deck.dir === "b" ? ["f", "r"] : [deck.dir === "r" ? "r" : "f"];
@@ -702,7 +717,7 @@ function rollover(deck) {
 const topicById = id => state.topics.find(t => t.id === id);
 const decksOfTopic = id => state.decks.filter(d => d.topic === id);
 function saveTopics() {
-  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, outline: t.outline || null })) }));
+  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, outline: t.outline || null, pins: t.pins || {} })) }));
 }
 // Fach distribution across several decks (a topic), same shape as deckProgress().
 function progressOf(decks) {
@@ -788,7 +803,10 @@ function assignCards(root, cards) {
       return { n, s };
     }).sort((a, b) => b.s - a.s);
     const best = ranked[0], second = ranked[1];
-    if (best && best.s >= 1.5) out.set(d.c.i, { node: best.n.id, unsure: !!second && second.s >= best.s * 0.85 });
+    if (best && best.s >= 1.5) {
+      const unsure = !!second && second.s >= best.s * 0.85;
+      out.set(d.c.i, { node: best.n.id, unsure, alt: unsure ? second.n.id : null });
+    }
   }
   return out;
 }
@@ -813,19 +831,35 @@ function buildTree(outline) {
 }
 const treeCache = new Map();
 // Tree + assignment, recomputed only when the outline or the cards change.
-function computeTree(key, outline, decks) {
-  const sig = JSON.stringify(outline || null) + "|" + decks.map(d => d.id + ":" + d.cardCount).join(",");
+function computeTree(key, outline, decks, pins = {}) {
+  const sig = JSON.stringify(outline || null) + "|" + JSON.stringify(pins) + "|" + decks.map(d => d.id + ":" + d.cardCount).join(",");
   const hit = treeCache.get(key);
   if (hit && hit.sig === sig) return hit;
   const root = buildTree(outline);
   const entries = decks.flatMap(d => (state.cards[d.id] || []).map(c => ({ c, d })));
   const assign = root ? assignCards(root, entries.map(e => e.c)) : new Map();
+  // Hand-made choices win. A choice for a branch that no longer exists is ignored.
+  if (root) {
+    const ids = new Set(); const walk = n => { ids.add(n.id); n.children.forEach(walk); }; walk(root);
+    for (const { c } of entries) {
+      const pin = pins[c.i];
+      if (pin === "none") assign.delete(c.i);
+      else if (pin && ids.has(pin)) assign.set(c.i, { node: pin, manual: true });
+    }
+  }
   const res = { sig, root, assign, entries };
   treeCache.set(key, res);
   return res;
 }
-const topicTree = t => computeTree(t.id, t.outline, decksOfTopic(t.id));
-const draftTree = te => computeTree("draft", te.outline, state.decks.filter(d => te.deckIds.has(d.id)));
+const topicTree = t => computeTree(t.id, t.outline, decksOfTopic(t.id), t.pins);
+const draftTree = te => computeTree("draft", te.outline, state.decks.filter(d => te.deckIds.has(d.id)), topicById(te.id)?.pins);
+// Moves a card to a branch by hand ("auto" = let the app decide again, "none" = no branch).
+function pinCard(topicId, cardId, target) {
+  const t = topicById(topicId); if (!t) return;
+  t.pins = { ...(t.pins || {}) };
+  if (target === "auto") delete t.pins[cardId]; else t.pins[cardId] = target;
+  saveTopics();
+}
 
 /* ---------- Branch suggestions: names and terms that keep appearing in cards without a branch ---------- */
 function suggestBranches(tt, outline) {
@@ -1635,29 +1669,68 @@ function topicHTML(t) {
 function treeHTML(t) {
   const tt = topicTree(t);
   if (!tt.root) return `<div class="panel tree-panel"><p>Noch kein Themenbaum. Baue unter <b>„Bearbeiten“</b> eine Gliederung des Themas auf oder füge sie als Text ein, z. B. aus deinen Vorlesungsnotizen. Die Karten werden dann automatisch den Zweigen zugeordnet.</p></div>`;
-  const stats = treeStats(tt), leaves = treeLeaves(tt.root);
+  const stats = treeStats(tt), leaves = treeLeaves(tt.root), open = state.treeExpanded;
   // The weakest branch: lowest progress among branches with at least 2 cards.
   const weak = leaves.filter(l => stats.get(l.id).cards >= 2).sort((a, b) => stats.get(a.id).pct - stats.get(b.id).pct)[0];
   const rest = tt.entries.filter(e => !tt.assign.has(e.c.i));
-  const unsure = [...tt.assign.values()].filter(a => a.unsure).length;
+  const unsureList = tt.entries.filter(e => tt.assign.get(e.c.i)?.unsure);
+  const manual = [...tt.assign.values()].filter(a => a.manual).length + Object.values(t.pins || {}).filter(v => v === "none").length;
+  // All branches for the "move to" menu, indented by level.
+  const nodes = []; const walk = n => { if (n !== tt.root) nodes.push(n); n.children.forEach(walk); }; walk(tt.root);
+  const label = id => nodes.find(n => n.id === id)?.label || "";
+  const short = l => l.length > 48 ? l.slice(0, 46) + "…" : l;
+  const pinOf = c => t.pins?.[c.i];
+  const cardRow = ({ c }) => {
+    const a = tt.assign.get(c.i), pin = pinOf(c);
+    const opts = [`<option value="auto" ${!pin ? "selected" : ""}>Automatisch${a && !a.manual ? ` (${esc(short(label(a.node)))})` : ""}</option>`]
+      .concat(nodes.map(n => `<option value="${n.id}" ${pin === n.id ? "selected" : ""}>${"  ".repeat(n.depth - 1)}${esc(short(n.label))}</option>`))
+      .concat(`<option value="none" ${pin === "none" ? "selected" : ""}>Keinem Zweig zuordnen</option>`);
+    return `<li class="cardrow">
+      <span class="cr-text" title="${esc(plain(c.f))}">${esc(plain(c.f).slice(0, 130))}</span>
+      ${a?.manual || pin === "none" ? `<span class="cr-tag">von Hand</span>` : a?.unsure ? `<span class="cr-tag unsure">unsicher</span>` : ""}
+      <select class="reassign" data-tid="${t.id}" data-cid="${c.i}" aria-label="Zweig dieser Karte">${opts.join("")}</select>
+    </li>`;
+  };
+  const byNode = new Map();
+  for (const e of tt.entries) { const a = tt.assign.get(e.c.i); if (a) (byNode.get(a.node) || byNode.set(a.node, []).get(a.node)).push(e); }
   const nodeHTML = n => {
-    const st = stats.get(n.id), isWeak = weak && n === weak && st.pct < 60;
+    const st = stats.get(n.id), isWeak = weak && n === weak && st.pct < 60, own = byNode.get(n.id) || [], isOpen = open.has(n.id);
     return `<li><div class="node ${isWeak ? "weak" : ""}">
       <span class="node-label">${esc(n.label)}</span>
       <span class="node-meta">${st.cards ? `${st.cards} ${st.cards === 1 ? "Karte" : "Karten"}${st.due ? ` · <span class="c-rev">${st.due} fällig</span>` : ""} · ${st.pct} %` : "noch keine Karten"}${isWeak ? " · schwächster Zweig" : ""}</span>
       ${st.units ? `<div class="segbar" aria-hidden="true">${st.counts.map((v, i) => v ? `<i class="f${i}" style="width:${v / st.units * 100}%"></i>` : "").join("")}</div>` : ""}
-    </div>${n.children.length ? `<ul>${n.children.map(nodeHTML).join("")}</ul>` : ""}</li>`;
+      ${own.length ? `<button class="linkish node-toggle" data-act="tree-toggle" data-k="${n.id}" aria-expanded="${isOpen}">${isOpen ? "Karten ausblenden" : `${own.length} ${own.length === 1 ? "Karte" : "Karten"} anzeigen`}</button>` : ""}
+    </div>
+    ${isOpen ? `<ul class="cardlist">${own.map(cardRow).join("")}</ul>` : ""}
+    ${n.children.length ? `<ul>${n.children.map(nodeHTML).join("")}</ul>` : ""}</li>`;
   };
+  const section = (k, title, list, intro) => list.length ? `
+    <div class="tree-sec">
+      <button class="linkish sec-toggle" data-act="tree-toggle" data-k="${k}" aria-expanded="${open.has(k)}">${open.has(k) ? "▾" : "▸"} ${title}</button>
+      ${open.has(k) ? `${intro}<ul class="cardlist">${list.map(k === "unsure" ? unsureRow : cardRow).join("")}</ul>` : ""}
+    </div>` : "";
+  // Unsure cards: confirm the guess or take the runner-up with one click.
+  const unsureRow = ({ c }) => {
+    const a = tt.assign.get(c.i);
+    return `<li class="cardrow">
+      <span class="cr-text" title="${esc(plain(c.f))}">${esc(plain(c.f).slice(0, 130))}</span>
+      <span class="cr-pick">
+        <button class="btn ghost sm" data-act="pin" data-tid="${t.id}" data-cid="${c.i}" data-to="${a.node}">${esc(short(label(a.node)))}</button>
+        ${a.alt ? `<button class="btn ghost sm" data-act="pin" data-tid="${t.id}" data-cid="${c.i}" data-to="${a.alt}">${esc(short(label(a.alt)))}</button>` : ""}
+      </span>
+    </li>`;
+  };
+  const sg = rest.length ? suggestBranches(tt, t.outline) : [];
   return `
   <div class="panel tree-panel">
     ${tt.root.label ? `<p class="tree-root">${esc(tt.root.label)}</p>` : ""}
     <ul class="tree">${tt.root.children.map(nodeHTML).join("")}</ul>
-    <p class="muted small">${tt.assign.size} von ${tt.entries.length} Karten automatisch zugeordnet, über Begriffe aus dem Baum${unsure ? `. ${unsure} davon passen fast genauso gut zu einem anderen Zweig` : ""}. Die Balken zeigen die Karteikasten-Fächer, der Prozentwert den Fortschritt.</p>
-    ${rest.length ? `<details class="tree-rest"><summary>${rest.length} ${rest.length === 1 ? "Karte passt" : "Karten passen"} zu keinem Zweig</summary>
-      <p class="muted small">Oft fehlt dafür ein Zweig im Baum. Ergänze ihn unter „Bearbeiten“, dann werden die Karten neu zugeordnet.</p>
-      ${(() => { const sg = suggestBranches(tt, t.outline); return sg.length ? `<p class="small">Vorschläge für neue Zweige: ${sg.map(x => `<b>${esc(x.label)}</b> (${x.hits})`).join(", ")}. <button class="linkish" data-act="topic-edit" data-id="${t.id}">Im Editor hinzufügen</button></p>` : ""; })()}
-      <ul class="rest-list">${rest.slice(0, 15).map(e => `<li>${esc(plain(e.c.f).slice(0, 110))}</li>`).join("")}${rest.length > 15 ? `<li class="muted">… und ${rest.length - 15} weitere</li>` : ""}</ul>
-    </details>` : ""}
+    <p class="muted small">${tt.assign.size} von ${tt.entries.length} Karten zugeordnet${manual ? `, davon ${manual} von Hand` : ""}. Die Balken zeigen die Karteikasten-Fächer, der Prozentwert den Fortschritt. Unter „Karten anzeigen“ kannst du jede Karte einem anderen Zweig zuordnen.</p>
+    ${section("unsure", `${unsureList.length} unsichere ${unsureList.length === 1 ? "Zuordnung" : "Zuordnungen"} prüfen`, unsureList,
+      `<p class="muted small">Diese Karten passen fast gleich gut zu zwei Zweigen. Ein Klick auf den richtigen Zweig legt sie fest.</p>`)}
+    ${section("rest", `${rest.length} ${rest.length === 1 ? "Karte" : "Karten"} ohne Zweig`, rest,
+      `<p class="muted small">Oft fehlt dafür ein Zweig im Baum. Ergänze ihn unter „Bearbeiten“ oder ordne die Karte hier direkt zu.</p>
+       ${sg.length ? `<p class="small">Vorschläge für neue Zweige: ${sg.map(x => `<b>${esc(x.label)}</b> (${x.hits})`).join(", ")}. <button class="linkish" data-act="topic-edit" data-id="${t.id}">Im Editor hinzufügen</button></p>` : ""}`)}
   </div>`;
 }
 
@@ -2087,6 +2160,11 @@ document.addEventListener("click", e => {
     }
     else outlineOp(act.slice(3), nid);
   }
+  else if (act === "tree-toggle") { const k = b.dataset.k; state.treeExpanded.has(k) ? state.treeExpanded.delete(k) : state.treeExpanded.add(k); render(); }
+  else if (act === "pin") {
+    pinCard(b.dataset.tid, b.dataset.cid, b.dataset.to);
+    toast(`Karte festgelegt: „${b.textContent.trim()}“.`); render();
+  }
   else if (act === "topic-tree") { state.treeOpen = state.treeOpen === id ? null : id; if (state.topicEdit?.id === id) state.topicEdit = null; render(); }
   else if (act === "topic-cancel") { state.topicEdit = null; render(); }
   else if (act === "topic-del") { state.topicEdit.confirmDelete = true; render(); }
@@ -2149,6 +2227,11 @@ document.addEventListener("change", e => {
   else if (t.id === "imp-head" && d) { d.header = t.checked; render(); }
   else if (t.id === "set-name") { const deck = deckById(t.dataset.id); const v = t.value.trim(); if (v) { deck.name = v.slice(0, 120); markMeta(deck); render(); } }
   else if (t.id === "set-new") { const deck = deckById(t.dataset.id); deck.newPerDay = Math.max(0, Math.min(500, Math.round(+t.value || 0))); markMeta(deck); render(); }
+  else if (t.classList?.contains("reassign")) {
+    pinCard(t.dataset.tid, t.dataset.cid, t.value);
+    const name = t.value === "auto" ? "automatische Zuordnung" : t.value === "none" ? "keinem Zweig" : `„${t.selectedOptions[0].textContent.trim()}“`;
+    toast(`Karte zugeordnet: ${name}.`); render();
+  }
   else if (t.id === "set-topic") { const deck = deckById(t.dataset.id); deck.topic = t.value || null; markMeta(deck); render(); }
   else if (t.id === "imp-topic" && d) { d.topic = t.value; state.lastTopic = t.value; }
   else if (t.classList?.contains("topic-deck") && state.topicEdit) { t.checked ? state.topicEdit.deckIds.add(t.value) : state.topicEdit.deckIds.delete(t.value); }
