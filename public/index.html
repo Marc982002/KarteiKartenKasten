@@ -112,6 +112,23 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 label.check{display:flex;gap:10px;align-items:center;font-size:15px}
 label.check input{width:18px;height:18px;accent-color:var(--accent)}
 .row-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ce-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ce-tools input[type=text]{flex:1 1 220px;width:auto}
+.ce-tools select{flex:0 1 240px;width:auto}
+.ce-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.ce-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.ce-row.susp .ce-text{opacity:.6}
+.ce-row.editing{display:flex;flex-direction:column;gap:10px;padding:12px 0}
+.ce-text{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+.ce-text span{color:var(--muted);font-size:14px}
+.ce-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;justify-content:flex-end}
+@media (max-width:600px){.ce-row{grid-template-columns:minmax(0,1fr)}.ce-meta{justify-content:flex-start}}
+.ce-acts{grid-column:1/-1;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+textarea.ce-input{font:inherit;font-size:16px;min-height:0;line-height:1.45}
+.cr-tag.leech{color:var(--again)} .cr-tag.susp{color:var(--muted)}
+.ce-note{margin:0;color:var(--again)}
+.leech-note{border:2px dashed var(--again);border-radius:var(--radius);padding:10px 14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.foot-links{display:flex;gap:16px;flex-wrap:wrap}
 .restore-confirm{border:2px solid var(--again);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .restore-confirm p{margin:0}
 .warn-text{color:var(--hard);font-weight:700}
@@ -609,8 +626,8 @@ function previewFor(s) {
 /* ---------- Storage ---------- */
 const enc = st => st ? [st.q, +st.s.toFixed(4), +st.d.toFixed(3), st.due, st.last, st.reps, st.lapses, st.step] : null;
 const dec = a => Array.isArray(a) ? { q: a[0], s: a[1], d: a[2], due: a[3], last: a[4], reps: a[5], lapses: a[6], step: a[7] } : null;
-const toRow = c => ({ i: c.i, f: c.f, b: c.b, sf: enc(c.sf), sr: enc(c.sr) });
-const fromRow = r => ({ i: r.i, f: r.f, b: r.b, sf: dec(r.sf), sr: dec(r.sr), c: r._k || 0 });
+const toRow = c => { const r = { i: c.i, f: c.f, b: c.b, sf: enc(c.sf), sr: enc(c.sr) }; if (c.x) r.x = 1; return r; };
+const fromRow = r => ({ i: r.i, f: r.f, b: r.b, sf: dec(r.sf), sr: dec(r.sr), c: r._k || 0, x: !!r.x });
 const META_KEYS = ["id", "name", "created", "dir", "newPerDay", "retention", "newDay", "newCount", "revDay", "revCount", "chunks", "cardCount", "mode", "topic"];
 const metaOf = deck => { const m = { kind: "deck" }; for (const k of META_KEYS) m[k] = deck[k] ?? null; return m; };
 const clone = x => JSON.parse(JSON.stringify(x));
@@ -749,6 +766,7 @@ const state = {
   lastTopic: "",
   treeOpen: null,                  // topic id whose tree panel is open
   treeExpanded: new Set(),         // open card lists in the tree view (branch ids, "rest", "unsure")
+  cardList: { q: "", filter: "all", limit: 50, edit: null, confirmDel: null, adding: false }, // the "Karten" tab of a deck
   backup: null,                    // status from the server: backup folder, last automatic backup, last download
   restore: null                    // { name, created, docs, decks, cards, busy } while a restore waits for confirmation
 };
@@ -879,9 +897,10 @@ function buildTree(outline) {
   return root.children.length ? root : null;
 }
 const treeCache = new Map();
+let cardsRev = 0; // bumped whenever a card's text changes, so the tree re-matches it
 // Tree + assignment, recomputed only when the outline or the cards change.
 function computeTree(key, outline, decks, pins = {}) {
-  const sig = JSON.stringify(outline || null) + "|" + JSON.stringify(pins) + "|" + decks.map(d => d.id + ":" + d.cardCount).join(",");
+  const sig = JSON.stringify(outline || null) + "|" + JSON.stringify(pins) + "|" + decks.map(d => d.id + ":" + d.cardCount).join(",") + "|" + cardsRev;
   const hit = treeCache.get(key);
   if (hit && hit.sig === sig) return hit;
   const root = buildTree(outline);
@@ -1006,6 +1025,7 @@ function buildQueue(deck) {
   const dirs = dirsOf(deck);
   const learn = [], rev = [], fresh = [];
   for (const card of cards) {
+    if (card.x) continue; // suspended
     const due = [];
     for (const dir of dirs) {
       const st = card["s" + dir];
@@ -1121,7 +1141,7 @@ const TIERS = [{ min: 75, name: "Gold", color: "--gold" }, { min: 50, name: "Sil
 function deckProgress(deck) {
   const counts = [0, 0, 0, 0, 0, 0];
   let learned = 0;
-  for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; counts[fachOf(st)]++; if (st && st.q === 2) learned++; }
+  for (const c of state.cards[deck.id] || []) if (!c.x) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; counts[fachOf(st)]++; if (st && st.q === 2) learned++; }
   return progressFrom(counts, learned);
 }
 function progressFrom(counts, learned) {
@@ -1406,7 +1426,7 @@ function nextUnit(s) {
 }
 function advance() {
   const s = state.session;
-  s.current = nextUnit(s); s.revealed = false; s.answer = null; s.preview = null; s.shownAt = Date.now(); s.answerMs = null;
+  s.current = nextUnit(s); s.revealed = false; s.answer = null; s.editing = false; s.preview = null; s.shownAt = Date.now(); s.answerMs = null;
   if (!s.current) {
     s.finished = true;
     if (allCleared()) state.flags.cleared = true;
@@ -1455,7 +1475,7 @@ function undo() {
   if (h.wasFirst) { s.first.delete(ukey(h.unit)); s.startFach.delete(ukey(h.unit)); }
   unrecordAnswer();
   // Back to the revealed card exactly as it was: same answer, same check, so a new rating keeps the typed text.
-  s.current = h.unit; s.revealed = true; s.finished = false; s.preview = null;
+  s.current = h.unit; s.revealed = true; s.finished = false; s.preview = null; s.editing = false;
   s.mode = h.mode || "flip"; s.options = h.options || null; s.answer = h.answer || null; s.shownAt = h.shownAt; s.answerMs = h.answerMs;
   markChunk(deck, h.unit.card.c); markMeta(deck);
   render();
@@ -1469,6 +1489,15 @@ function stampFor(prev, next, from, to, now) {
   if (!prev || prev.q !== 2) return { kind: "up", title: "Gelernt ✓", text: `wieder in ${when} (${day})` };
   if (to > from) return { kind: "up", title: `${FAECHER[to].name} ↑`, text: `sitzt jetzt etwa ${fmtDur(next.s * DAY)}, wieder am ${day}` };
   return { kind: "ok", title: "Sitzt", text: `wieder in ${when} (${day})` };
+}
+// Takes the current card out of the round (and out of future rounds) without rating it.
+function suspendCurrent() {
+  const s = state.session, u = s?.current; if (!u) return;
+  setSuspended(u.deck, u.card, true);
+  s.main = s.main.filter(x => x.card !== u.card); s.learn = s.learn.filter(x => x.card !== u.card);
+  s.editing = false;
+  toast("Karte ausgesetzt. Unter „Karten“ im Stapel kannst du sie bearbeiten und wieder aufnehmen.");
+  advance(); render();
 }
 function exitStudy() { flush(); state.session = null; state.view = "home"; render(); }
 
@@ -1567,8 +1596,8 @@ function loadSample() {
 /* ---------- Stats ---------- */
 function deckStats(deck) {
   const cards = state.cards[deck.id] || [], dirs = dirsOf(deck), now = Date.now(), eod = endOfToday();
-  const st = { fresh: 0, learning: 0, review: 0, mature: 0, rSum: 0, forecast: Array(14).fill(0), hard: [] };
-  for (const c of cards) for (const dir of dirs) {
+  const st = { fresh: 0, learning: 0, review: 0, mature: 0, rSum: 0, forecast: Array(14).fill(0), hard: [], suspended: cards.filter(c => c.x).length };
+  for (const c of cards) if (!c.x) for (const dir of dirs) {
     const s = c["s" + dir];
     if (!s) { st.fresh++; continue; }
     if (isLearning(s)) { st.learning++; st.forecast[0]++; }
@@ -1580,7 +1609,7 @@ function deckStats(deck) {
       const idx = s.due <= eod ? 0 : Math.ceil((s.due - eod) / DAY);
       if (idx < 14) st.forecast[idx]++;
     }
-    if (s.lapses >= 3) st.hard.push({ text: dir === "f" ? c.f : c.b, lapses: s.lapses });
+    if (s.lapses >= LEECH) st.hard.push({ text: dir === "f" ? c.f : c.b, lapses: s.lapses });
   }
   st.hard.sort((a, b) => b.lapses - a.lapses);
   st.avgR = st.review ? st.rSum / st.review : null;
@@ -1942,11 +1971,12 @@ function deckHTML(deck) {
       </div>
       <div class="deck-actions">
         <button class="btn ${nothing ? "ghost" : "primary"}" data-act="study" data-id="${deck.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Lernen"}</button>
+        <button class="btn ghost" data-act="tab" data-tab="cards" data-id="${deck.id}" aria-pressed="${open === "cards"}">Karten</button>
         <button class="btn ghost" data-act="tab" data-tab="stats" data-id="${deck.id}" aria-pressed="${open === "stats"}">Statistik</button>
         <button class="btn ghost" data-act="tab" data-tab="settings" data-id="${deck.id}" aria-pressed="${open === "settings"}">Einstellungen</button>
       </div>
     </div>
-    ${open === "stats" ? statsHTML(deck) : open === "settings" ? settingsHTML(deck) : ""}
+    ${open === "stats" ? statsHTML(deck) : open === "settings" ? settingsHTML(deck) : open === "cards" ? cardsHTML(deck) : ""}
   </li>`;
 }
 
@@ -2020,7 +2050,8 @@ function statsHTML(deck) {
       <div class="bar-labels">${s.forecast.map((_, i) => `<span${i === 0 ? ' style="color:var(--rev);font-weight:700"' : ""}>${wd[new Date(Date.now() + i * DAY).getDay()]}</span>`).join("")}</div>
       <p class="muted small">Grüner Balken = heute fällig.</p>
     </div>
-    ${s.hard.length ? `<div><p class="eyebrow" style="margin-bottom:8px">Am häufigsten vergessen</p><ul class="hard-list">${s.hard.slice(0, 8).map(h => `<li><span>${esc(plain(h.text).slice(0, 120))}</span><span>${h.lapses}× vergessen</span></li>`).join("")}</ul><p class="muted small" style="margin-top:8px">Tipp: Formuliere solche Karten kürzer oder teile sie in zwei auf.</p></div>` : ""}
+    ${s.hard.length ? `<div><p class="eyebrow" style="margin-bottom:8px">Am häufigsten vergessen</p><ul class="hard-list">${s.hard.slice(0, 8).map(h => `<li><span>${esc(plain(h.text).slice(0, 120))}</span><span>${h.lapses}× vergessen</span></li>`).join("")}</ul><p class="muted small" style="margin-top:8px">Tipp: Formuliere solche Karten kürzer oder teile sie in zwei auf. <button class="linkish" data-act="cl-open" data-id="${deck.id}" data-filter="leech">Problemkarten bearbeiten</button></p></div>` : ""}
+    ${s.suspended ? `<p class="muted small">${s.suspended} ${s.suspended === 1 ? "Karte ist" : "Karten sind"} ausgesetzt und zählen hier nicht mit. <button class="linkish" data-act="cl-open" data-id="${deck.id}" data-filter="susp">Ansehen</button></p>` : ""}
   </div>`;
 }
 
@@ -2061,6 +2092,94 @@ function settingsHTML(deck) {
         : `<button class="btn danger" data-act="del" data-id="${deck.id}">Stapel löschen</button>`}
     </div>
   </div>`;
+}
+
+/* ---------- Cards: search, edit, add, delete, suspend ----------
+   A card you keep forgetting ("Problemkarte") is usually badly worded, so the app points it out. */
+const LEECH = 4;
+const lapsesOf = c => Math.max(c.sf?.lapses || 0, c.sr?.lapses || 0);
+const isLeech = c => lapsesOf(c) >= LEECH;
+const fold = t => plain(t).toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+function cardFach(deck, c) { return Math.min(...dirsOf(deck).map(d => fachOf(c["s" + d]))); }
+function listCards(deck) {
+  const cl = state.cardList, q = fold(cl.q.trim());
+  let list = (state.cards[deck.id] || []).filter(c =>
+    (cl.filter === "all" || cl.filter === "leech" && isLeech(c) || cl.filter === "susp" && c.x || cl.filter === "new" && !c.sf && !c.sr)
+    && (!q || fold(c.f).includes(q) || fold(c.b).includes(q)));
+  if (cl.filter === "leech") list = list.slice().sort((a, b) => lapsesOf(b) - lapsesOf(a));
+  return list;
+}
+function cardFormHTML(prefix, f, b, extra, save, saveAttrs) {
+  return `
+    <label class="field">Vorderseite<textarea class="ce-input" id="${prefix}-f" rows="2">${esc(f)}</textarea></label>
+    <label class="field">Rückseite<textarea class="ce-input" id="${prefix}-b" rows="3">${esc(b)}</textarea><span class="hint">Mit *Sternchen* markierst du Schlüsselbegriffe.</span></label>
+    ${extra}
+    <div class="row-actions">
+      <button class="btn primary sm" data-act="${save}" ${saveAttrs}>Speichern</button>
+      <button class="btn ghost sm" data-act="${save === "st-save" ? "st-cancel" : save === "cl-add-save" ? "cl-add-cancel" : "cl-cancel"}">Abbrechen</button>
+    </div>`;
+}
+function cardRowsHTML(deck) {
+  const cl = state.cardList, list = listCards(deck);
+  if (!list.length) return `<p class="muted small">${cl.q.trim() ? "Keine Karte gefunden." : cl.filter === "leech" ? `Keine Problemkarten. Als Problemkarte gilt eine Karte, die du ${LEECH}-mal oder öfter vergessen hast.` : cl.filter === "susp" ? "Keine Karte ausgesetzt." : "Keine Karten."}</p>`;
+  const row = c => {
+    if (cl.edit === c.i) return `<li class="ce-row editing">${cardFormHTML("ce", c.f, c.b,
+      c.sf || c.sr ? `<label class="check"><input type="checkbox" id="ce-reset"> Lernstand zurücksetzen (die Karte gilt dann wieder als neu)</label>` : "",
+      "cl-save", `data-id="${deck.id}" data-cid="${c.i}"`)}</li>`;
+    const fach = cardFach(deck, c), n = lapsesOf(c);
+    return `<li class="ce-row ${c.x ? "susp" : ""}">
+      <div class="ce-text"><b>${esc(plain(c.f).slice(0, 200))}</b><span>${esc(plain(c.b).slice(0, 240))}</span></div>
+      <div class="ce-meta">
+        ${c.x ? `<span class="cr-tag susp">ausgesetzt</span>` : `<span class="cr-tag">${FAECHER[fach].name}</span>`}
+        ${n >= LEECH ? `<span class="cr-tag leech">${n}× vergessen</span>` : ""}
+      </div>
+      <div class="ce-acts">${cl.confirmDel === c.i
+        ? `<span class="small">Karte und Lernstand löschen?</span><button class="btn danger solid sm" data-act="cl-del-yes" data-id="${deck.id}" data-cid="${c.i}">Löschen</button><button class="btn ghost sm" data-act="cl-del-no">Behalten</button>`
+        : `<button class="linkish" data-act="cl-edit" data-cid="${c.i}">Bearbeiten</button>
+           <button class="linkish" data-act="cl-susp" data-id="${deck.id}" data-cid="${c.i}">${c.x ? "Wieder lernen" : "Aussetzen"}</button>
+           <button class="linkish" data-act="cl-del" data-cid="${c.i}">Löschen</button>`}</div>
+    </li>`;
+  };
+  return `<ul class="ce-list">${list.slice(0, cl.limit).map(row).join("")}</ul>
+    ${list.length > cl.limit ? `<button class="btn ghost sm" data-act="cl-more">Weitere ${Math.min(50, list.length - cl.limit)} von ${list.length - cl.limit} anzeigen</button>` : ""}`;
+}
+function cardsHTML(deck) {
+  const cl = state.cardList, cards = state.cards[deck.id] || [];
+  const nLeech = cards.filter(isLeech).length, nSusp = cards.filter(c => c.x).length, nNew = cards.filter(c => !c.sf && !c.sr).length;
+  const opt = (v, label) => `<option value="${v}" ${cl.filter === v ? "selected" : ""}>${label}</option>`;
+  return `
+  <div class="panel">
+    <div class="ce-tools">
+      <label class="sr" for="cl-q">Karten durchsuchen</label>
+      <input type="text" id="cl-q" data-id="${deck.id}" placeholder="Suchen …" value="${esc(cl.q)}" autocomplete="off">
+      <label class="sr" for="cl-filter">Welche Karten</label>
+      <select id="cl-filter" data-id="${deck.id}">
+        ${opt("all", `Alle (${cards.length})`)}${opt("new", `Noch nie gelernt (${nNew})`)}${opt("leech", `Problemkarten (${nLeech})`)}${opt("susp", `Ausgesetzt (${nSusp})`)}
+      </select>
+      <button class="btn ghost" data-act="cl-add">Neue Karte</button>
+    </div>
+    ${cl.adding ? `<div class="ce-row editing">${cardFormHTML("ce-new", "", "", "", "cl-add-save", `data-id="${deck.id}"`)}</div>` : ""}
+    ${nLeech && cl.filter !== "leech" ? `<p class="small ce-note">${nLeech} ${nLeech === 1 ? "Karte" : "Karten"} vergisst du immer wieder. Meist hilft es, sie kürzer zu formulieren oder aufzuteilen. <button class="linkish" data-act="cl-filter" data-filter="leech">Zeigen</button></p>` : ""}
+    <div id="cl-list">${cardRowsHTML(deck)}</div>
+    <p class="muted small">Ausgesetzte Karten kommen nicht mehr dran, bis du sie wieder aufnimmst. Ihr Lernstand bleibt erhalten.</p>
+  </div>`;
+}
+const focusEnd = sel => { const el = $(sel); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } };
+function refreshCardList(deck) { const el = $("#cl-list"); if (el) el.innerHTML = cardRowsHTML(deck); }
+function openCardList(deckId, filter = "all") {
+  state.open = { id: deckId, tab: "cards" };
+  state.cardList = { q: "", filter, limit: 50, edit: null, confirmDel: null, adding: false };
+}
+// Saves new text for a card. Returns false (and says why) if it cannot.
+function saveCardText(deck, c, f, b) {
+  f = (f || "").trim().slice(0, 20000); b = (b || "").trim().slice(0, 20000);
+  if (!f || !b) { toast("Vorder- und Rückseite dürfen nicht leer sein."); return false; }
+  if ((state.cards[deck.id] || []).some(x => x !== c && x.f === f)) { toast("Eine andere Karte in diesem Stapel hat schon genau diese Vorderseite."); return false; }
+  c.f = f; c.b = b; cardsRev++;
+  return true;
+}
+function setSuspended(deck, c, on) {
+  c.x = !!on; markChunk(deck, c.c);
 }
 
 /* ---------- Backup: download everything, restore from a file ---------- */
@@ -2230,7 +2349,8 @@ function studyHTML() {
     }
   }
   if (s.mode === "flip" && !s.revealed) actions = `<button class="btn primary wide" data-act="reveal" data-autofocus>Antwort zeigen <kbd>Leertaste</kbd></button>`;
-  if (s.revealed) {
+  if (s.revealed && s.editing) actions = "";
+  else if (s.revealed) {
     const pv = previewFor(s), o = pv.o;
     actions = `<div class="rates" role="group" aria-label="Wie gut wusstest du es?">${o.map((x, i) =>
       `<button class="rate ${sugg === i + 1 ? "suggested" : ""}" style="--c:var(${lab[i][1]})" data-act="rate" data-g="${i + 1}" ${(sugg ? sugg === i + 1 : i === 2) ? "data-autofocus" : ""}>${sugg === i + 1 ? "<small>Vorschlag</small>" : ""}<b>${lab[i][0]}</b><span>${fmtDur(x.due - pv.now)} · ${i + 1}</span></button>`).join("")}</div>`;
@@ -2256,15 +2376,21 @@ function studyHTML() {
     ${s.stamp && !s.revealed ? `<div class="stamp ${s.stamp.kind}" role="status"><b>${esc(s.stamp.title)}</b><span>Letzte Karte: ${esc(s.stamp.text)}</span></div>` : ""}
     <article class="card ${flipTap ? "tap" : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
       <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span><span>${esc(info)}</span></div>
+      ${s.editing ? `<div class="ce-row editing">${cardFormHTML("st", u.card.f, u.card.b, "", "st-save", "")}</div>` : `
       <div class="face front ${sizeF}"><span>${richText(front)}</span></div>
-      ${s.revealed ? `<div class="face back ${sizeB}">${s.answer?.method === "keywords" ? highlightAnswer(back, s.answer) : richText(back)}</div>` : ""}
+      ${s.revealed ? `<div class="face back ${sizeB}">${s.answer?.method === "keywords" ? highlightAnswer(back, s.answer) : richText(back)}</div>` : ""}`}
     </article>
+    ${s.revealed && !s.editing && isLeech(u.card) ? `<div class="leech-note" role="note"><b>Problemkarte: schon ${lapsesOf(u.card)}× vergessen.</b> <span>Oft liegt es an der Karte, nicht an dir. Kürzer formulieren oder aufteilen hilft meist.</span>
+      <span class="row-actions"><button class="btn ghost sm" data-act="st-edit">Bearbeiten</button><button class="btn ghost sm" data-act="st-susp">Aussetzen</button></span></div>` : ""}
     ${feedback}
     ${s.revealed ? historyHTML(u, s.answer) : ""}
     ${actions}
     <div class="study-foot">
       <span>${hint}</span>
-      <button class="linkish" data-act="undo" ${s.history.length ? "" : "disabled"}>Letzte Bewertung rückgängig (Z)</button>
+      <span class="foot-links">
+        ${s.revealed && !s.editing ? `<button class="linkish" data-act="st-edit">Karte bearbeiten (E)</button>` : ""}
+        <button class="linkish" data-act="undo" ${s.history.length ? "" : "disabled"}>Letzte Bewertung rückgängig (Z)</button>
+      </span>
     </div>
   </div>`;
 }
@@ -2413,7 +2539,11 @@ document.addEventListener("click", e => {
     saveTopics(); state.lastTopic = t.id; state.topicEdit = null;
     toast(te.id ? "Thema gespeichert." : `Thema „${name}“ angelegt.`); render();
   }
-  else if (act === "tab") { state.open = state.open?.id === id && state.open.tab === b.dataset.tab ? null : { id, tab: b.dataset.tab }; state.confirmDelete = null; render(); }
+  else if (act === "tab") {
+    const same = state.open?.id === id && state.open.tab === b.dataset.tab;
+    if (b.dataset.tab === "cards" && !same) openCardList(id); else state.open = same ? null : { id, tab: b.dataset.tab };
+    state.confirmDelete = null; render();
+  }
   else if (act === "reveal") reveal();
   else if (act === "choose") chooseOption(+b.dataset.i);
   else if (act === "dont-know") dontKnow();
@@ -2435,6 +2565,46 @@ document.addEventListener("click", e => {
     state.decks = state.decks.filter(d => d.id !== id); delete state.cards[id];
     state.confirmDelete = null; state.open = null; toast("Stapel gelöscht."); render();
   }
+  else if (act?.startsWith("cl-")) {
+    const cl = state.cardList, deck = deckById(id || state.open?.id), c = deck && (state.cards[deck.id] || []).find(x => x.i === b.dataset.cid);
+    if (act === "cl-open") { openCardList(id, b.dataset.filter); render(); $("#cl-q")?.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+    if (act === "cl-filter") { cl.filter = b.dataset.filter; cl.limit = 50; }
+    else if (act === "cl-more") cl.limit += 50;
+    else if (act === "cl-add") { cl.adding = !cl.adding; cl.edit = null; }
+    else if (act === "cl-add-cancel") cl.adding = false;
+    else if (act === "cl-add-save" && deck) {
+      const nc = { i: rid(), f: "", b: "", sf: null, sr: null, c: 0, x: false };
+      if (!saveCardText(deck, nc, $("#ce-new-f")?.value, $("#ce-new-b")?.value)) return;
+      state.cards[deck.id].push(nc); assignChunks(deck);
+      toast("Karte hinzugefügt. Sie kommt als neue Karte dran.");
+      render(); $("#ce-new-f")?.focus(); return; // form stays open for the next card
+    }
+    else if (act === "cl-edit") { cl.edit = b.dataset.cid; cl.confirmDel = null; cl.adding = false; }
+    else if (act === "cl-cancel") cl.edit = null;
+    else if (act === "cl-save" && c) {
+      if (!saveCardText(deck, c, $("#ce-f")?.value, $("#ce-b")?.value)) return;
+      if ($("#ce-reset")?.checked) { c.sf = null; c.sr = null; }
+      markChunk(deck, c.c); cl.edit = null; toast("Karte gespeichert.");
+    }
+    else if (act === "cl-susp" && c) { setSuspended(deck, c, !c.x); toast(c.x ? "Karte ausgesetzt." : "Karte wird wieder abgefragt."); }
+    else if (act === "cl-del") { cl.confirmDel = b.dataset.cid; cl.edit = null; }
+    else if (act === "cl-del-no") cl.confirmDel = null;
+    else if (act === "cl-del-yes" && c) {
+      state.cards[deck.id] = state.cards[deck.id].filter(x => x !== c); cardsRev++;
+      assignChunks(deck); cl.confirmDel = null; toast("Karte gelöscht.");
+    }
+    render();
+    if (act === "cl-edit") focusEnd("#ce-f");
+    if (act === "cl-add") $("#ce-new-f")?.focus();
+  }
+  else if (act === "st-edit") { const s = state.session; if (s?.current) { s.editing = true; render(); focusEnd("#st-f"); } }
+  else if (act === "st-cancel") { const s = state.session; if (s) { s.editing = false; render(); } }
+  else if (act === "st-save") {
+    const s = state.session, u = s?.current; if (!u) return;
+    if (!saveCardText(u.deck, u.card, $("#st-f")?.value, $("#st-b")?.value)) return;
+    markChunk(u.deck, u.card.c); s.editing = false; toast("Karte gespeichert."); render();
+  }
+  else if (act === "st-susp") suspendCurrent();
   else if (act === "backup-dl") downloadBackup();
   else if (act === "restore-yes") doRestore();
   else if (act === "restore-no") { state.restore = null; render(); }
@@ -2451,6 +2621,7 @@ document.addEventListener("change", e => {
   if (t.id === "file-new") { openImport(t.files[0]); t.value = ""; }
   else if (t.id?.startsWith("file-add-")) { openImport(t.files[0], t.dataset.id); t.value = ""; }
   else if (t.id === "file-restore") { openRestore(t.files[0]); t.value = ""; }
+  else if (t.id === "cl-filter") { state.cardList.filter = t.value; state.cardList.limit = 50; state.cardList.edit = null; render(); $("#cl-filter")?.focus(); }
   else if (t.id === "imp-f" && d) { d.fc = +t.value; render(); }
   else if (t.id === "imp-b" && d) { d.bc = +t.value; render(); }
   else if (t.id === "imp-head" && d) { d.header = t.checked; render(); }
@@ -2484,6 +2655,7 @@ document.addEventListener("input", e => {
     if (f) { f.node.label = t.value; clearTimeout(olTimer); olTimer = setTimeout(refreshOutlineInfo, 350); }
   }
   if (t.id === "set-ret") { const o = $("#ret-out"); if (o) o.textContent = t.value + " %"; }
+  if (t.id === "cl-q") { const deck = deckById(t.dataset.id); state.cardList.q = t.value; state.cardList.limit = 50; state.cardList.edit = null; state.cardList.confirmDel = null; if (deck) refreshCardList(deck); }
 });
 document.addEventListener("dragover", e => { if (state.view !== "home") return; e.preventDefault(); $("#drop")?.classList.add("over"); });
 document.addEventListener("dragleave", e => { if (!e.relatedTarget) $("#drop")?.classList.remove("over"); });
@@ -2526,6 +2698,7 @@ document.addEventListener("keydown", e => {
   if (n) { e.preventDefault(); rate(n); return; }
   if ((e.key === " " || e.key === "Enter") && !e.target.closest?.("button")) { e.preventDefault(); rate(s.answer?.suggest || 3); return; }
   if (e.key === "z" || e.key === "Z") { e.preventDefault(); undo(); }
+  if ((e.key === "e" || e.key === "E") && !s.editing) { e.preventDefault(); s.editing = true; render(); focusEnd("#st-f"); }
 });
 
 /* ---------- Boot ---------- */
