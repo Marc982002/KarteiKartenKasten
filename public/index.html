@@ -394,6 +394,18 @@ input[type=text].ol-input:focus{border-bottom:2px solid var(--accent)}
 .day-sum{flex:1 1 100%;margin:0;font-size:14.5px;color:var(--muted);border-top:1.5px dashed var(--line);padding-top:10px}
 .day-sum b{color:var(--ink);font-family:var(--font-hand);font-size:17px}
 
+/* Deine Entwicklung */
+.history{display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:2px dashed var(--line);border-radius:var(--wobble-soft);font-size:14px}
+.hline{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hlabel{font-family:var(--font-hand);font-weight:700;font-size:16px;margin-right:4px}
+.hchip{--c:var(--muted);font-size:12.5px;font-weight:700;color:var(--c);border:1.5px solid currentColor;border-radius:var(--wobble);padding:0 8px}
+.harrow{color:var(--muted)}
+.hnow{font-size:12.5px;font-weight:700;color:var(--accent)}
+.hcmp{margin:0;font-weight:700}
+.hcmp.up{color:var(--good)} .hcmp.down{color:var(--again)}
+.hprev-box summary{cursor:pointer;color:var(--muted)}
+.hprev{margin:6px 0 0;padding-left:10px;border-left:3px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-hand);font-size:16px}
+
 /* Stamp after each card */
 .stamp{--c:var(--accent);align-self:flex-start;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:4px 14px;border:2.5px solid var(--c);border-radius:var(--wobble);color:var(--c);transform:rotate(-2deg);animation:stamp-in .35s ease-out}
 .stamp b{font-family:var(--font-display);font-size:24px;line-height:1.1}
@@ -630,6 +642,11 @@ function ApiStore() {
     delChunk: (id, k) => api("DELETE", chunkId(id, k)),
     async delDeck(id, chunks) { for (let k = 0; k < chunks; k++) await api("DELETE", chunkId(id, k)); await api("DELETE", "deck-" + id); },
     getDoc: name => api("GET", name),
+    async listKind(kind) {
+      const r = await fetch("/api/docs?kind=" + encodeURIComponent(kind));
+      if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
+      return r.json();
+    },
     putDoc: (name, data) => api("PUT", name, data)
   };
 }
@@ -649,6 +666,10 @@ function LocalStore() {
     async delChunk(id, k) { del("kk:chunk:" + id + ":" + k); },
     async delDeck(id, chunks) { for (let k = 0; k < chunks; k++) del("kk:chunk:" + id + ":" + k); del("kk:deck:" + id); set("kk:index", index().filter(x => x !== id)); },
     async getDoc(name) { return get("kk:doc:" + name); },
+    async listKind(kind) {
+      const keys = ls ? Object.keys(ls) : Object.keys(mem);
+      return keys.filter(k => k.startsWith("kk:doc:")).map(k => get(k)).filter(d => d && d.kind === kind);
+    },
     async putDoc(name, data) { set("kk:doc:" + name, data); }
   };
 }
@@ -717,7 +738,8 @@ const state = {
   pasteOpen: false,
   profile: { goal: 20, days: {}, badges: {}, daily: {} }, // answers per day (goal + streak), earned badges, per-day learned/moved-up counts
   flags: { comeback: false, cleared: false },   // one-off events of this visit that badges look at
-  log: { day: "", entries: [] },   // today's answer history: [cardId, dir, grade, time, deckId]
+  log: { day: "", entries: [] },
+  attempts: new Map(),             // "cardId:dir" -> log entries of all days, oldest first   // today's answer history: [cardId, dir, grade, time, deckId]
   topics: [],                      // [{ id, name, created }]; a deck links to one via deck.topic
   topicEdit: null,                 // { id | null, name, deckIds: Set, confirmDelete } while the topic panel is open
   lastTopic: "",
@@ -1007,10 +1029,14 @@ function markLog() {
   const log = state.log;
   queueWrite("l:" + log.day, () => state.store.putDoc("log-" + log.day, { kind: "log", day: log.day, entries: log.entries.slice() }));
 }
-function recordAnswer(deck, u, g, now) {
+// Log entry: [cardId, dir, grade, time, deckId, info]. info holds what was typed, how the app judged it,
+// what it suggested and how long the answer took.
+function recordAnswer(deck, u, g, now, info = null) {
   const day = dayKey(now);
   if (state.log.day !== day) state.log = { day, entries: [] };
-  state.log.entries.push([u.card.i, u.dir, g, now, deck.id]);
+  const entry = info ? [u.card.i, u.dir, g, now, deck.id, info] : [u.card.i, u.dir, g, now, deck.id];
+  state.log.entries.push(entry);
+  addAttempt(entry);
   const days = state.profile.days;
   if (!days[day]) {
     const last = Object.keys(days).filter(k => k < day && days[k] > 0).sort().pop();
@@ -1023,10 +1049,50 @@ function recordAnswer(deck, u, g, now) {
 function unrecordAnswer() {
   const day = state.log.day;
   if (!state.log.entries.length) return;
-  state.log.entries.pop();
+  const e = state.log.entries.pop();
+  const list = state.attempts.get(e[0] + ":" + e[1]);
+  if (list && list[list.length - 1] === e) list.pop();
   state.profile.days[day] = Math.max(0, (state.profile.days[day] || 0) - 1);
   markLog(); markProfile();
 }
+/* ---------- Answer history per card (all days) ---------- */
+function addAttempt(e) {
+  const k = e[0] + ":" + e[1];
+  (state.attempts.get(k) || state.attempts.set(k, []).get(k)).push(e);
+}
+// What to keep about one answer: the text, the app's judgement and suggestion, the time taken.
+function answerInfo(s) {
+  const a = s.answer, info = { mode: s.mode, s: a?.suggest || 0 };
+  if (s.answerMs != null) info.ms = s.answerMs;
+  if (a?.given) info.a = a.given.slice(0, 2000);
+  if (a?.verdict) info.v = a.verdict;
+  if (a?.method) info.m = a.method;
+  if (a?.method === "keywords") { info.f = a.found.map(k => k.label); info.x = a.missing.map(k => k.label); }
+  if (s.mode === "mc" && a && a.pick >= 0) info.pick = plain(s.options[a.pick]).slice(0, 300);
+  return info;
+}
+const GRADE = ["", "Nochmal", "Schwer", "Gut", "Leicht"], GRADE_C = ["", "--again", "--hard", "--good", "--easy"];
+// "Deine Entwicklung": earlier answers to this card, compared with the one just given.
+function historyHTML(u, ans) {
+  const prev = state.attempts.get(u.card.i + ":" + u.dir) || [];
+  if (!prev.length) return "";
+  const shown = prev.slice(-6);
+  const chips = shown.map(e => `<span class="hchip" style="--c:var(${GRADE_C[e[2]]})" title="${new Date(e[3]).toLocaleString("de-DE")}">${GRADE[e[2]]}</span>`).join(`<span class="harrow" aria-hidden="true">→</span>`);
+  const lastKw = [...prev].reverse().find(e => e[5]?.f), lastTxt = [...prev].reverse().find(e => e[5]?.a);
+  let cmp = "";
+  if (lastKw && ans?.method === "keywords") {
+    const pf = lastKw[5].f.length, pn = pf + lastKw[5].x.length, nf = ans.found.length, nn = nf + ans.missing.length;
+    const was = pn ? pf / pn : 0, now = nn ? nf / nn : 0;
+    const dir = now > was + 0.001 ? "up" : now < was - 0.001 ? "down" : "same";
+    cmp = `<p class="hcmp ${dir}">Letztes Mal ${pf} von ${pn} Begriffen, heute ${nf} von ${nn}${dir === "up" ? " · besser geworden ↑" : dir === "down" ? " · weniger als letztes Mal" : " · gleich viele"}</p>`;
+  }
+  return `<div class="history">
+    <div class="hline"><span class="hlabel">Deine Entwicklung${prev.length > shown.length ? ` (letzte ${shown.length} von ${prev.length})` : ""}:</span>${chips}<span class="harrow" aria-hidden="true">→</span><span class="hnow">heute</span></div>
+    ${cmp}
+    ${lastTxt ? `<details class="hprev-box"><summary>Deine letzte Antwort (${fmtAgo(Date.now() - lastTxt[3])})</summary><p class="hprev">${esc(lastTxt[5].a)}</p></details>` : ""}
+  </div>`;
+}
+
 /* ---------- Gamification: Fächer, Fortschritt, Abzeichen ----------
    Everything rewards real memory and regular practice, never "correct" ratings,
    so there is no reason to rate a card better than it went. */
@@ -1293,18 +1359,18 @@ function submitTyped(value) {
     const res = (usesKeywords(ans) && checkKeywords(value, ans)) || { method: "exact", ...checkAnswer(value, plain(ans)) };
     s.answer = { kind: "type", given, ...res };
   }
-  s.revealed = true; render();
+  markAnswered(s); s.revealed = true; render();
 }
 function chooseOption(i) {
   const s = state.session; if (!s?.current || s.revealed || s.mode !== "mc" || !s.options[i]) return;
   const right = normA(s.options[i]) === normA(answerOf(s.current));
   s.answer = { kind: "mc", pick: i, verdict: right ? "right" : "wrong", suggest: right ? 3 : 1 };
-  s.revealed = true; render();
+  markAnswered(s); s.revealed = true; render();
 }
 function dontKnow() {
   const s = state.session; if (!s?.current || s.revealed) return;
   s.answer = { kind: s.mode, pick: -1, given: "", verdict: "empty", suggest: 1 };
-  s.revealed = true; render();
+  markAnswered(s); s.revealed = true; render();
 }
 
 /* ---------- Session ---------- */
@@ -1334,7 +1400,7 @@ function nextUnit(s) {
 }
 function advance() {
   const s = state.session;
-  s.current = nextUnit(s); s.revealed = false; s.answer = null; s.preview = null;
+  s.current = nextUnit(s); s.revealed = false; s.answer = null; s.preview = null; s.shownAt = Date.now(); s.answerMs = null;
   if (!s.current) {
     s.finished = true;
     if (allCleared()) state.flags.cleared = true;
@@ -1343,12 +1409,14 @@ function advance() {
   }
   Object.assign(s, pickMode(s.current.deck, s.current));
 }
-function reveal() { const s = state.session; if (s && s.current && !s.revealed && s.mode === "flip") { s.revealed = true; render(); } }
+const markAnswered = s => { if (s.shownAt) s.answerMs = Date.now() - s.shownAt; };
+function reveal() { const s = state.session; if (s && s.current && !s.revealed && s.mode === "flip") { markAnswered(s); s.revealed = true; render(); } }
 function rate(g) {
   const s = state.session; if (!s || !s.current || !s.revealed) return;
   const u = s.current, deck = u.deck, key = "s" + u.dir, k = ukey(u);
   const prev = u.card[key], now = Date.now();
-  s.history.push({ unit: u, prev: prev ? { ...prev } : null, main: [...s.main], learn: [...s.learn], done: s.done, newCount: deck.newCount, revCount: deck.revCount, wasFirst: !s.first.has(k), lastKey: s.lastKey, lastMove: s.lastMove, stamp: s.stamp, daily: { ...(state.profile.daily[dayKey()] || {}) } });
+  s.history.push({ unit: u, prev: prev ? { ...prev } : null, main: [...s.main], learn: [...s.learn], done: s.done, newCount: deck.newCount, revCount: deck.revCount, wasFirst: !s.first.has(k), lastKey: s.lastKey, lastMove: s.lastMove, stamp: s.stamp, daily: { ...(state.profile.daily[dayKey()] || {}) },
+    answer: s.answer, mode: s.mode, options: s.options, shownAt: s.shownAt, answerMs: s.answerMs });
   if (s.history.length > 50) s.history.shift();
   const next = previewFor(s).o[g - 1];
   u.card[key] = next;
@@ -1356,7 +1424,7 @@ function rate(g) {
   deck.revCount = (deck.revCount || 0) + 1;
   if (!s.first.has(k)) s.first.set(k, g);
   if (isLearning(next)) s.learn.push(u);
-  recordAnswer(deck, u, g, now);
+  recordAnswer(deck, u, g, now, answerInfo(s));
   const from = fachOf(prev), to = fachOf(next);
   if (!s.startFach.has(k)) s.startFach.set(k, { u, from });
   s.lastMove = { from, to };
@@ -1380,7 +1448,9 @@ function undo() {
   deck.newCount = h.newCount; deck.revCount = h.revCount;
   if (h.wasFirst) { s.first.delete(ukey(h.unit)); s.startFach.delete(ukey(h.unit)); }
   unrecordAnswer();
-  s.current = h.unit; s.revealed = true; s.finished = false; s.mode = "flip"; s.options = null; s.answer = null; s.preview = null;
+  // Back to the revealed card exactly as it was: same answer, same check, so a new rating keeps the typed text.
+  s.current = h.unit; s.revealed = true; s.finished = false; s.preview = null;
+  s.mode = h.mode || "flip"; s.options = h.options || null; s.answer = h.answer || null; s.shownAt = h.shownAt; s.answerMs = h.answerMs;
   markChunk(deck, h.unit.card.c); markMeta(deck);
   render();
 }
@@ -2090,6 +2160,7 @@ function studyHTML() {
       ${s.revealed ? `<div class="face back ${sizeB}">${s.answer?.method === "keywords" ? highlightAnswer(back, s.answer) : richText(back)}</div>` : ""}
     </article>
     ${feedback}
+    ${s.revealed ? historyHTML(u, s.answer) : ""}
     ${actions}
     <div class="study-foot">
       <span>${hint}</span>
@@ -2381,6 +2452,11 @@ async function loadAll() {
   for (const t of state.topics) if (!t.outline && t.tree) { t.outline = outlineFromText(t.tree); delete t.tree; }
   state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) }, badges: { ...(profile?.badges || {}) }, daily: { ...(profile?.daily || {}) } };
   state.log = { day: today, entries: Array.isArray(log?.entries) ? log.entries : [] };
+  // Every earlier answer, for "Deine Entwicklung". Today's entries come from state.log so new ones land in the same list.
+  state.attempts = new Map();
+  const logs = state.store.listKind ? await withTimeout(state.store.listKind("log"), 10000).catch(() => []) : [];
+  for (const l of logs.filter(l => l.day !== today).sort((a, b) => a.day < b.day ? -1 : 1)) for (const e of l.entries || []) addAttempt(e);
+  for (const e of state.log.entries) addAttempt(e);
   // Before history existed: count today's answers from the decks.
   if (state.profile.days[today] == null) {
     const n = state.decks.reduce((a, d) => a + (d.revDay === today ? d.revCount || 0 : 0), 0);
