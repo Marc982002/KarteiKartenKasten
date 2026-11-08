@@ -49,6 +49,12 @@ Steht hinter einem Begriff eine Übersetzung in Klammern, reicht eins von beiden
 
 Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt die App nicht. Die Bewertung ist deshalb immer nur ein Vorschlag.
 
+## Themen
+
+Mehrere Kartensets zu einem Fach lassen sich zu einem **Thema** bündeln, z. B. alle Sets einer Vorlesung. Auf der Übersicht steht das Thema mit Summen und Gesamtfortschritt über seinen Sets. **„Thema lernen“** startet eine Runde über alle Sets. Neue Karten kommen abwechselnd aus den Sets, und jedes Set behält sein eigenes Tageslimit und seine Einstellungen.
+
+Ein Thema legst du über **„Neues Thema“** an. Die Zuordnung änderst du unter „Bearbeiten“ am Thema, in den Einstellungen eines Sets oder schon beim Import. Wird ein Thema gelöscht, bleiben seine Sets erhalten.
+
 ## Fortschritt und Abzeichen
 
 - **Karteikasten mit Fächern** (Statistik eines Stapels): Jede Karte liegt in einem von fünf Fächern, je nachdem, wie lange sie laut Algorithmus sicher sitzt (unter 1 Tag bis über 3 Monate). Gewusste Karten rücken weiter, vergessene fallen zurück.
