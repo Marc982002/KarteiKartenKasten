@@ -169,6 +169,15 @@ td.off{color:var(--muted);opacity:.6}
 .verdict b{color:var(--c);font-size:16px}
 .verdict q{font-weight:700;overflow-wrap:anywhere}
 .rate.suggested{box-shadow:0 0 0 2px var(--c)}
+.answer-form textarea{flex:1 1 100%;font:inherit;font-size:17px;line-height:1.45;min-height:96px;padding:10px 14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px}
+.chip-label{font-size:12px;color:var(--muted);min-width:64px}
+.chip{font-size:13px;line-height:1.3;padding:2px 9px;border-radius:999px;border:1px solid currentColor;overflow-wrap:anywhere}
+.chip.hit{color:var(--good)} .chip.miss{color:var(--again)}
+mark{color:inherit;border-radius:3px;padding:0 2px}
+mark.kw{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+mark.hit{background:color-mix(in srgb,var(--good) 24%,transparent)}
+mark.miss{background:color-mix(in srgb,var(--again) 24%,transparent);text-decoration:underline wavy color-mix(in srgb,var(--again) 70%,transparent)}
 .rate small{font-size:10.5px;font-weight:700;color:var(--c);text-transform:uppercase;letter-spacing:.07em}
 @media (max-width:440px){.options{grid-template-columns:1fr}}
 .drop .btns{display:flex;gap:8px;flex-wrap:wrap}
@@ -538,7 +547,11 @@ function streakInfo() {
 const answerOf = u => u.dir === "f" ? u.card.b : u.card.f;
 const typeable = t => t.length <= 60 && !t.includes("\n");
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const normA = t => String(t).toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[.,!?;:"'„“”‚‘’«»¿¡…]/g, " ").replace(/\s+/g, " ").trim();
+const normA = t => String(t).toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[.,!?;:"'„“”‚‘’«»¿¡…*]/g, " ").replace(/\s+/g, " ").trim();
+// *Sternchen* or **Fettschrift** (as AI tools write it) mark key terms. plain() removes the marks.
+const MARK = /\*{1,2}([^*\n]+?)\*{1,2}/g;
+const plain = t => String(t).replace(MARK, "$1");
+const hasMarks = t => /\*{1,2}[^*\n]+?\*{1,2}/.test(t);
 const stripMarks = t => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss");
 const ARTICLES = /^(der|die|das|den|dem|des|ein|eine|einen|the|a|an|to|el|la|los|las|le|les|l|un|une|il|lo|gli)\s+/;
 function lev(a, b) {
@@ -574,6 +587,112 @@ function checkAnswer(given, correct) {
   }
   return best;
 }
+/* Long answers: check whether the key terms appear in what was typed. */
+const STOPWORDS = new Set(("der die das den dem des ein eine einer eines einem einen kein keine und oder aber auch als am an auf aus bei beim bis "
+  + "durch fur gegen im in ins ist sind war waren wird werden wurde wurden worden sein seine seinen seinem seiner ihre ihren ihrem ihrer hat haben hatte "
+  + "mit nach nicht nur noch von vom vor zu zum zur uber unter um wie wo was wer wenn dass so sich sie er es wir ihr ich du man dies diese dieser dieses "
+  + "diesem jede jeder jedes kann konnen konnte muss mussen soll sollen sehr mehr weniger meist etwa bzw usw etc dabei dadurch damit dann denn doch hier "
+  + "dort zwei drei viele andere anderen lediglich eigentlich grundlegend anstatt statt also sowie beispielsweise jedoch bereits daher deshalb somit "
+  + "zudem ebenfalls eher besonders insbesondere gleichzeitig hingegen vielmehr sondern weil ob ohne zwischen innerhalb gibt geht eigene eigenen eigener "
+  + "neue neuen neuer alle allen allem aller ganz ganze gesamte gesamten reine reinen reiner bestehende bestehenden lassen etwas immer wieder schon "
+  + "einfach dessen deren denen welche welcher welches indem wobei sodass zwar trotzdem allerdings ebenso stets jeweils unsere unser vgl "
+  + "the a an and or of to in on at by for with from is are was were be been being as that this these those it its into than then which who what when "
+  + "where why how not no can may must should would will do does did has have had also such via per each other only own same some any more most "
+  + "them they their there through during before after about").split(" "));
+const kn = w => stripMarks(w.toLowerCase());
+const wordsOf = t => plain(t).match(/[\p{L}\p{N}][\p{L}\p{N}-]*/gu) || [];
+const isTerm = n => n.length >= 3 && !STOPWORDS.has(n);
+const termsOf = t => wordsOf(t).map(kn).filter(isTerm);
+// Brackets that hold a source or an example, not a second name for the term.
+const PAREN_SKIP = /^\s*(vgl|z\.?\s*b|bzw|siehe|s\.|e\.?\s*g|i\.?\s*e|etc|u\.?\s*a|wie|etwa|zum beispiel|beispielsweise|such as|like)\b|^[\s\d.,:;–-]*$/i;
+
+// A key term has one or more alternatives ("Scope (Reichweite)": either counts).
+// need "all": every word of one alternative must appear; "half": at least half of them.
+function keywordsOf(answer) {
+  const text = String(answer);
+  const marks = [...text.matchAll(MARK)];
+  if (marks.length) {
+    const list = marks.map(m => {
+      const after = text.slice(m.index + m[0].length).match(/^\s*\(([^()]{1,80})\)/);
+      const alt = after && !PAREN_SKIP.test(after[1]) ? after[1].trim() : null;
+      const alts = [m[1], alt].filter(Boolean).map(p => { const t = termsOf(p); return t.length ? t : wordsOf(p).map(kn); }).filter(a => a.length);
+      return { label: [m[1].trim(), alt].filter(Boolean).join(" / "), alts, need: "all" };
+    }).filter(k => k.alts.length);
+    return { marked: true, list };
+  }
+  // Automatic: split into words and bracket groups.
+  const toks = [];
+  for (const m of text.matchAll(/\(([^()]*)\)|([\p{L}\p{N}][\p{L}\p{N}-]*)/gu)) toks.push(m[1] !== undefined ? { paren: m[1] } : { w: m[2], n: kn(m[2]) });
+  const units = [], seen = new Set(), used = new Set();
+  // "Begriff (Übersetzung)" becomes one term with two alternatives.
+  toks.forEach((t, i) => {
+    if (t.paren === undefined || PAREN_SKIP.test(t.paren)) return;
+    const inner = termsOf(t.paren);
+    if (!inner.length || inner.length > 4) return;
+    const left = [];
+    for (let j = i - 1; j >= 0 && left.length < Math.min(3, inner.length); j--) {
+      if (toks[j].paren !== undefined) break;
+      if (isTerm(toks[j].n) && !used.has(j)) left.unshift(j);
+    }
+    if (!left.length) return;
+    const leftWords = left.map(j => toks[j].n), key = leftWords.join(" ");
+    if (seen.has(key)) return;
+    left.forEach(j => used.add(j)); seen.add(key); leftWords.forEach(n => seen.add(n)); inner.forEach(n => seen.add(n));
+    units.push({ label: left.map(j => toks[j].w).join(" ") + " / " + t.paren.trim(), alts: [leftWords, inner], need: "half", i: left[0], score: 30 });
+  });
+  // Remaining single words: prefer nouns and technical terms (capitalised), long words, numbers.
+  toks.forEach((t, i) => {
+    if (t.paren !== undefined || used.has(i) || !isTerm(t.n) || seen.has(t.n)) return;
+    seen.add(t.n);
+    units.push({ label: t.w, alts: [[t.n]], need: "all", i, score: Math.min(t.n.length, 12) + (/^\p{Lu}/u.test(t.w) ? 6 : 0) + (/\d/.test(t.n) ? 4 : 0) });
+  });
+  const list = units.length > 7 ? units.slice().sort((a, b) => b.score - a.score).slice(0, 7).sort((a, b) => a.i - b.i) : units;
+  return { marked: false, list };
+}
+// One key word counts as found despite endings (chemisch/chemischen), compounds (Sonnenlichtenergie) or a small typo.
+function wordHit(kw, tokens) {
+  const num = /\d/.test(kw);
+  for (const t of tokens) {
+    if (t === kw) return true;
+    if (num) continue;
+    if (Math.min(t.length, kw.length) >= 5 && (t.startsWith(kw) || kw.startsWith(t)) && Math.abs(t.length - kw.length) <= 3) return true;
+    if (kw.length >= 5 && t.length > kw.length && t.includes(kw)) return true;
+    const tol = kw.length >= 9 ? 2 : kw.length >= 5 ? 1 : 0;
+    if (tol && lev(t, kw) <= tol) return true;
+  }
+  return false;
+}
+const unitHit = (k, tokens) => k.alts.some(a => {
+  const h = a.filter(w => wordHit(w, tokens)).length;
+  return k.need === "all" ? h === a.length : h >= Math.ceil(a.length / 2);
+});
+function checkKeywords(given, answer) {
+  const kws = keywordsOf(answer);
+  if (!kws.list.length) return null;
+  const ws = wordsOf(given).map(kn);
+  const tokens = [...ws, ...ws.slice(1).map((w, i) => ws[i] + w)]; // "Licht Energie" also matches "Lichtenergie"
+  const found = [], missing = [];
+  for (const k of kws.list) (unitHit(k, tokens) ? found : missing).push(k);
+  const ratio = found.length / kws.list.length;
+  // Terms the user marked are reliable, so they need more hits than automatically chosen ones.
+  const [good, ok] = kws.marked ? [0.8, 0.5] : [0.6, 0.3];
+  const verdict = !ws.length ? "empty" : ratio >= good ? "right" : ratio >= ok ? "close" : "wrong";
+  return { method: "keywords", marked: kws.marked, found, missing, ratio, verdict, suggest: verdict === "right" ? 3 : verdict === "close" ? 2 : 1 };
+}
+// Answers that are checked by key terms instead of exact wording.
+const usesKeywords = ans => hasMarks(ans) || !typeable(plain(ans));
+// Shows the correct answer with found terms in green and missing ones in red.
+function highlightAnswer(text, res) {
+  const hit = new Set(res.found.flatMap(k => k.alts.flat()));
+  const miss = new Set(res.missing.flatMap(k => k.alts.flat()).filter(w => !hit.has(w)));
+  return plain(text).split(/([\p{L}\p{N}][\p{L}\p{N}-]*)/u).map((part, i) => {
+    if (i % 2 === 0) return esc(part);
+    const n = kn(part);
+    return hit.has(n) ? `<mark class="hit">${esc(part)}</mark>` : miss.has(n) ? `<mark class="miss">${esc(part)}</mark>` : esc(part);
+  }).join("");
+}
+const richText = t => esc(t).replace(/\*{1,2}([^*\n]+?)\*{1,2}/g, '<mark class="kw">$1</mark>');
+
 // Wrong options that look like real answers: other cards' answers of similar length.
 function distractors(deck, u) {
   const correct = answerOf(u), seen = new Set([normA(correct)]), pool = [];
@@ -585,20 +704,27 @@ function distractors(deck, u) {
   pool.sort((a, b) => Math.abs(a.length - correct.length) - Math.abs(b.length - correct.length));
   return shuffle(pool.slice(0, 12)).slice(0, 3);
 }
-// Automatic: new cards as multiple choice (recognise first), then type the answer (recall). Long answers are flipped.
+// Automatic: new cards as multiple choice (recognise first), then type the answer (recall).
+// Long answers are typed too and checked by key terms.
 function pickMode(deck, u) {
   const m = deck.mode || "auto", ans = answerOf(u), isNew = !ust(u);
   if (m === "flip") return { mode: "flip", options: null };
+  if (m === "self") return { mode: "self", options: null };
   if (m === "mc" || (m === "auto" && isNew)) {
     const d = distractors(deck, u);
     if (d.length === 3) return { mode: "mc", options: shuffle([ans, ...d]) };
     if (m === "mc") return { mode: "flip", options: null };
   }
-  return typeable(ans) ? { mode: "type", options: null } : { mode: "flip", options: null };
+  return { mode: "type", options: null };
 }
 function submitTyped(value) {
-  const s = state.session; if (!s?.current || s.revealed || s.mode !== "type") return;
-  s.answer = { kind: "type", given: value.trim(), ...checkAnswer(value, answerOf(s.current)) };
+  const s = state.session; if (!s?.current || s.revealed || (s.mode !== "type" && s.mode !== "self")) return;
+  const ans = answerOf(s.current), given = value.trim();
+  if (s.mode === "self") s.answer = { kind: "self", method: "self", given, verdict: given ? "self" : "empty", suggest: given ? 0 : 1 };
+  else {
+    const res = (usesKeywords(ans) && checkKeywords(value, ans)) || { method: "exact", ...checkAnswer(value, plain(ans)) };
+    s.answer = { kind: "type", given, ...res };
+  }
   s.revealed = true; render();
 }
 function chooseOption(i) {
@@ -828,7 +954,7 @@ function dropHTML() {
   <div class="drop" id="drop">
     <div class="txt">
       <strong>CSV-Datei hierher ziehen oder Tabelle einfügen</strong>
-      <span class="muted small">Spalte 1 = Vorderseite, Spalte 2 = Rückseite. Komma, Semikolon und Tab werden erkannt. Du kannst auch Zeilen aus Excel, Google Sheets, Notion oder Quizlet kopieren und hier einfügen.</span>
+      <span class="muted small">Spalte 1 = Vorderseite, Spalte 2 = Rückseite. Komma, Semikolon und Tab werden erkannt. Mit *Sternchen* markierst du Schlüsselbegriffe in langen Antworten. Du kannst auch Zeilen aus Excel, Google Sheets, Notion oder Quizlet kopieren und hier einfügen.</span>
     </div>
     <div class="btns">
       <label class="btn primary" for="file-new">Datei auswählen</label>
@@ -983,7 +1109,7 @@ function statsHTML(deck) {
       <div class="bar-labels">${s.forecast.map((_, i) => `<span${i === 0 ? ' style="color:var(--rev);font-weight:700"' : ""}>${wd[new Date(Date.now() + i * DAY).getDay()]}</span>`).join("")}</div>
       <p class="muted small">Grüner Balken = heute fällig.</p>
     </div>
-    ${s.hard.length ? `<div><p class="eyebrow" style="margin-bottom:8px">Am häufigsten vergessen</p><ul class="hard-list">${s.hard.slice(0, 8).map(h => `<li><span>${esc(h.text.slice(0, 120))}</span><span>${h.lapses}× vergessen</span></li>`).join("")}</ul><p class="muted small" style="margin-top:8px">Tipp: Formuliere solche Karten kürzer oder teile sie in zwei auf.</p></div>` : ""}
+    ${s.hard.length ? `<div><p class="eyebrow" style="margin-bottom:8px">Am häufigsten vergessen</p><ul class="hard-list">${s.hard.slice(0, 8).map(h => `<li><span>${esc(plain(h.text).slice(0, 120))}</span><span>${h.lapses}× vergessen</span></li>`).join("")}</ul><p class="muted small" style="margin-top:8px">Tipp: Formuliere solche Karten kürzer oder teile sie in zwei auf.</p></div>` : ""}
   </div>`;
 }
 
@@ -1004,8 +1130,9 @@ function settingsHTML(deck) {
         <option value="auto" ${(deck.mode || "auto") === "auto" ? "selected" : ""}>Automatisch (empfohlen)</option>
         <option value="type" ${deck.mode === "type" ? "selected" : ""}>Immer eintippen</option>
         <option value="mc" ${deck.mode === "mc" ? "selected" : ""}>Immer Multiple Choice</option>
+        <option value="self" ${deck.mode === "self" ? "selected" : ""}>Eintippen, selbst vergleichen</option>
         <option value="flip" ${deck.mode === "flip" ? "selected" : ""}>Nur aufdecken</option>
-      </select><span class="hint">Automatisch: neue Karten als Multiple Choice, danach Antwort eintippen. Antworten über 60 Zeichen werden aufgedeckt.</span></label>
+      </select><span class="hint">Automatisch: neue Karten als Multiple Choice, danach Antwort eintippen. Lange Antworten werden über Schlüsselbegriffe geprüft. Mit *Sternchen* in der CSV legst du die Begriffe selbst fest.</span></label>
     </div>
     <label class="field">Ziel: so viel sollst du noch wissen, wenn eine Karte wiederkommt · <span id="ret-out">${ret} %</span>
       <input type="range" id="set-ret" data-id="${deck.id}" min="75" max="97" step="1" value="${ret}">
@@ -1061,19 +1188,38 @@ function studyHTML() {
     const correctN = normA(back);
     feedback = `<div class="options" role="group" aria-label="Antwort wählen">${s.options.map((o, i) => {
       const cls = s.revealed ? (normA(o) === correctN ? "right" : s.answer?.pick === i ? "wrong" : "") : "";
-      return `<button class="opt ${cls}" data-act="choose" data-i="${i}" ${s.revealed ? "disabled" : ""}><kbd>${i + 1}</kbd><span>${esc(o)}</span></button>`;
+      return `<button class="opt ${cls}" data-act="choose" data-i="${i}" ${s.revealed ? "disabled" : ""}><kbd>${i + 1}</kbd><span>${esc(plain(o))}</span></button>`;
     }).join("")}</div>`;
     if (!s.revealed) actions = `<div class="row-actions"><button class="linkish" data-act="dont-know">Weiß ich nicht</button></div>`;
-  } else if (s.mode === "type" && !s.revealed) {
+  } else if ((s.mode === "type" || s.mode === "self") && !s.revealed) {
+    const long = !typeable(plain(back));
     actions = `<form class="answer-form" id="type-form" autocomplete="off">
       <label class="sr" for="type-input">Deine Antwort</label>
-      <input type="text" id="type-input" placeholder="Antwort eintippen …" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" data-autofocus>
+      ${long
+        ? `<textarea id="type-input" rows="3" placeholder="Antwort in eigenen Worten …" spellcheck="false" enterkeyhint="done" data-autofocus></textarea>`
+        : `<input type="text" id="type-input" placeholder="Antwort eintippen …" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" data-autofocus>`}
       <button class="btn primary" type="submit">Prüfen</button>
       <button class="linkish" type="button" data-act="dont-know">Weiß ich nicht</button>
     </form>`;
-  } else if (s.mode === "type" && s.answer) {
-    const V = { right: ["Richtig", "--good"], close: ["Fast richtig", "--hard"], wrong: ["Nicht richtig", "--again"], empty: ["Nicht beantwortet", "--muted"] }[s.answer.verdict];
-    feedback = `<div class="verdict" style="--c:var(${V[1]})"><b>${V[0]}</b>${s.answer.note ? `<span>${esc(s.answer.note)}</span>` : ""}${s.answer.given ? `<span>Deine Antwort: <q>${esc(s.answer.given)}</q></span>` : ""}</div>`;
+  } else if ((s.mode === "type" || s.mode === "self") && s.answer) {
+    const a = s.answer, yours = a.given ? `<span>Deine Antwort: <q>${esc(a.given)}</q></span>` : "";
+    if (a.method === "keywords") {
+      const V = { right: ["Richtig", "--good"], close: ["Teilweise richtig", "--hard"], wrong: ["Zu wenig getroffen", "--again"], empty: ["Nicht beantwortet", "--muted"] }[a.verdict];
+      const n = a.found.length + a.missing.length;
+      const chips = (list, cls) => list.map(k => `<span class="chip ${cls}">${esc(k.label)}</span>`).join("");
+      feedback = `<div class="verdict" style="--c:var(${V[1]})">
+        <b>${V[0]} · ${a.found.length} von ${n} ${a.marked ? "markierten " : ""}Schlüsselbegriffen</b>
+        ${a.found.length ? `<div class="chips"><span class="chip-label">Getroffen</span>${chips(a.found, "hit")}</div>` : ""}
+        ${a.missing.length ? `<div class="chips"><span class="chip-label">Fehlt</span>${chips(a.missing, "miss")}</div>` : ""}
+        ${yours}
+        <span class="muted small">Geprüft wird, ob die Begriffe vorkommen, nicht der Sinn. Passt der Vorschlag nicht, bewerte selbst.</span>
+      </div>`;
+    } else if (a.method === "self") {
+      feedback = `<div class="verdict" style="--c:var(--accent)"><b>${a.given ? "Vergleiche selbst" : "Nicht beantwortet"}</b>${yours}<span class="muted small">Die richtige Antwort steht auf der Karte. Bewerte, wie gut deine Antwort passt.</span></div>`;
+    } else {
+      const V = { right: ["Richtig", "--good"], close: ["Fast richtig", "--hard"], wrong: ["Nicht richtig", "--again"], empty: ["Nicht beantwortet", "--muted"] }[a.verdict];
+      feedback = `<div class="verdict" style="--c:var(${V[1]})"><b>${V[0]}</b>${a.note ? `<span>${esc(a.note)}</span>` : ""}${yours}</div>`;
+    }
   }
   if (s.mode === "flip" && !s.revealed) actions = `<button class="btn primary wide" data-act="reveal" data-autofocus>Antwort zeigen <kbd>Leertaste</kbd></button>`;
   if (s.revealed) {
@@ -1083,7 +1229,10 @@ function studyHTML() {
   }
   const hint = s.revealed
     ? (sugg ? "Enter übernimmt den Vorschlag. Du kannst auch selbst bewerten." : "Ehrlich bewerten: Schwer heißt gewusst, aber mit Mühe.")
-    : s.mode === "mc" ? "Wähle mit 1–4 oder per Klick." : s.mode === "type" ? "Tippe die Antwort und drücke Enter. Kleine Tippfehler sind okay." : "Erst selbst überlegen, dann Karte antippen.";
+    : s.mode === "mc" ? "Wähle mit 1–4 oder per Klick."
+    : s.mode === "self" ? "Schreib deine Antwort auf, Enter zeigt die Lösung zum Vergleich."
+    : s.mode === "type" && usesKeywords(back) ? "In eigenen Worten antworten. Geprüft wird, ob die Schlüsselbegriffe vorkommen. Enter prüft, Shift+Enter macht eine neue Zeile."
+    : s.mode === "type" ? "Tippe die Antwort und drücke Enter. Kleine Tippfehler sind okay." : "Erst selbst überlegen, dann Karte antippen.";
   return `
   <div class="study">
     <div class="study-bar">
@@ -1098,8 +1247,8 @@ function studyHTML() {
     <div class="progress" aria-hidden="true"><i style="width:${(prog * 100).toFixed(1)}%"></i></div>
     <article class="card ${flipTap ? "tap" : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
       <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span><span>${esc(info)}</span></div>
-      <div class="face front ${sizeF}">${esc(front)}</div>
-      ${s.revealed ? `<div class="face back ${sizeB}">${esc(back)}</div>` : ""}
+      <div class="face front ${sizeF}">${richText(front)}</div>
+      ${s.revealed ? `<div class="face back ${sizeB}">${s.answer?.method === "keywords" ? highlightAnswer(back, s.answer) : richText(back)}</div>` : ""}
     </article>
     ${feedback}
     ${actions}
@@ -1205,6 +1354,7 @@ document.addEventListener("paste", e => {
 });
 document.addEventListener("keydown", e => {
   if (state.view !== "study" || !state.session) return;
+  if (e.target.id === "type-input" && e.target.tagName === "TEXTAREA" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitTyped(e.target.value); return; }
   if (e.target.matches("input,select,textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
   const s = state.session;
   if (e.key === "Escape") { e.preventDefault(); exitStudy(); return; }

@@ -22,6 +22,33 @@ Dann im Browser öffnen: <http://localhost:4321>
 
 Beenden mit `Ctrl+C` im Terminal.
 
+## Karten und Abfrage
+
+CSV mit Spalte 1 = Vorderseite, Spalte 2 = Rückseite. Komma, Semikolon und Tab werden erkannt.
+
+Abfragearten pro Stapel (Einstellungen → Abfrageart):
+
+- **Automatisch** (Standard): neue Karten als Multiple Choice, danach Antwort eintippen.
+- **Immer eintippen**, **Immer Multiple Choice**, **Nur aufdecken**.
+- **Eintippen, selbst vergleichen**: Du schreibst deine Antwort, die App zeigt die Lösung daneben, du bewertest selbst.
+
+Beim Eintippen prüft die App:
+
+- **Kurze Antworten** (bis 60 Zeichen) auf Übereinstimmung, mit Toleranz für Tippfehler, Akzente und Artikel.
+- **Lange Antworten** über Schlüsselbegriffe. Gefundene Begriffe werden grün markiert, fehlende rot.
+
+Die Begriffe sucht die App automatisch heraus (bis zu 7, Fachbegriffe und Substantive bevorzugt). Dann schlägt sie ab 60 % Treffern „Gut“ vor, ab 30 % „Schwer“, sonst „Nochmal“.
+
+Du kannst die Begriffe auch selbst festlegen, mit Sternchen oder Fettschrift auf der Rückseite. Dann zählen nur diese, und es braucht 80 % für „Gut“ und 50 % für „Schwer“:
+
+```
+Photosynthese;Umwandlung von *Lichtenergie* in **chemische Energie**
+```
+
+Steht hinter einem Begriff eine Übersetzung in Klammern, reicht eins von beiden: Bei `Scope (Reichweite)` zählt „Scope“ genauso wie „Reichweite“. Klammern mit Quellen oder Beispielen („vgl. …“, „z. B. …“, „wie …“) werden ignoriert.
+
+Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt die App nicht. Die Bewertung ist deshalb immer nur ein Vorschlag.
+
 ## Wo die Daten liegen
 
 Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.db` (SQLite). Zum Sichern den ganzen Ordner `data/` kopieren, am besten bei beendetem Server.
