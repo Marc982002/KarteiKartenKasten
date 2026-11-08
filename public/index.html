@@ -15,6 +15,7 @@
   --card:#fffefa; --rule-red:#d4524a; --rule-blue:rgba(35,71,197,.11); --shadow:0 1px 2px rgba(20,30,50,.08),0 10px 30px rgba(20,30,50,.10);
   --again:#c4433a; --hard:#a86c12; --good:#2b844a; --easy:#2a68c9;
   --new:#2a68c9; --learn:#c4433a; --rev:#2b844a;
+  --bronze:#a5652e; --silver:#6b7788; --gold:#9c7406;
   --font-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
   --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
   --radius:10px;
@@ -25,6 +26,7 @@
   --card:#1c2531; --rule-red:#e06a61; --rule-blue:rgba(134,162,255,.09); --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
   --again:#ee6e64; --hard:#e2a544; --good:#55c27a; --easy:#6ea8ff;
   --new:#6ea8ff; --learn:#ee6e64; --rev:#55c27a; color-scheme:dark;
+  --bronze:#d99a63; --silver:#b4bfcc; --gold:#e6bb3c;
 }}
 :root[data-theme="dark"]{
   --bg:#10151c; --surface:#18202a; --ink:#e6ebf1; --muted:#97a2b2; --line:#2a3441;
@@ -32,6 +34,7 @@
   --card:#1c2531; --rule-red:#e06a61; --rule-blue:rgba(134,162,255,.09); --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
   --again:#ee6e64; --hard:#e2a544; --good:#55c27a; --easy:#6ea8ff;
   --new:#6ea8ff; --learn:#ee6e64; --rev:#55c27a; color-scheme:dark;
+  --bronze:#d99a63; --silver:#b4bfcc; --gold:#e6bb3c;
 }
 *{box-sizing:border-box}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -154,6 +157,36 @@ td.off{color:var(--muted);opacity:.6}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;max-width:calc(100% - 32px);box-shadow:var(--shadow);z-index:20}
 .loading{color:var(--muted);padding:40px 0}
+/* Karteikasten: compartments by how long a card is expected to stick */
+.f0{background:var(--line)}
+.f1{background:color-mix(in srgb,var(--accent) 22%,var(--surface))}
+.f2{background:color-mix(in srgb,var(--accent) 42%,var(--surface))}
+.f3{background:color-mix(in srgb,var(--accent) 62%,var(--surface))}
+.f4{background:color-mix(in srgb,var(--accent) 82%,var(--surface))}
+.f5{background:var(--accent)}
+.mastery{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-width:440px}
+.segbar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--line)}
+.segbar i{display:block;height:100%}
+.mastery-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tier{--t:var(--muted);font-size:12px;font-weight:700;padding:1px 9px;border-radius:999px;border:1px solid var(--t);color:var(--t)}
+.kasten{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:2px solid var(--muted);border-top-width:0;border-radius:0 0 10px 10px;background:var(--bg)}
+.fach{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;padding:12px 4px 10px;border-left:1px solid var(--line);min-width:0;text-align:center}
+.fach:first-child{border-left:0}
+.stack{display:flex;flex-direction:column-reverse;gap:2px;width:72%;max-width:60px;height:76px}
+.stack i{display:block;height:4px;border-radius:1px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 8%,transparent)}
+.fach b{font-family:var(--font-display);font-size:20px;line-height:1;font-variant-numeric:tabular-nums}
+.fach .nm{font-size:12px;font-weight:700}
+.fach .sub{font-size:11px;color:var(--muted);line-height:1.25}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.badge{--b:var(--accent);display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;min-width:0}
+.badge .disc{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-family:var(--font-display);font-weight:700;font-size:14px;border:2px dashed var(--line);color:var(--muted)}
+.badge.on .disc{border:2px solid var(--b);background:color-mix(in srgb,var(--b) 16%,var(--surface));color:var(--b)}
+.badge .txt{min-width:0;display:flex;flex-direction:column}
+.badge .txt b{font-size:14px}
+.badge .txt span{font-size:12px;color:var(--muted);line-height:1.35}
+.badge:not(.on) .txt b{color:var(--muted)}
+.move-note{font-variant-numeric:tabular-nums}
+@media (max-width:560px){.kasten{grid-template-columns:repeat(3,minmax(0,1fr))}.fach:nth-child(4){border-left:0}.fach:nth-child(n+4){border-top:1px solid var(--line)}}
 .card.tap{cursor:pointer}
 .answer-form{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .answer-form input{flex:1 1 240px;font-size:18px;min-height:52px;padding:10px 14px}
@@ -461,7 +494,8 @@ const state = {
   draft: null,         // import draft
   session: null, save: "saved",
   pasteOpen: false,
-  profile: { goal: 20, days: {} }, // answers per day, for daily goal + streak
+  profile: { goal: 20, days: {}, badges: {} }, // answers per day (goal + streak), earned badges with date
+  flags: { comeback: false, cleared: false },   // one-off events of this visit that badges look at
   log: { day: "", entries: [] }    // today's answer history: [cardId, dir, grade, time, deckId]
 };
 const deckById = id => state.decks.find(d => d.id === id);
@@ -511,7 +545,7 @@ function buildQueue(deck) {
 function markProfile() {
   const days = state.profile.days, keys = Object.keys(days).sort();
   for (const k of keys.slice(0, Math.max(0, keys.length - 400))) delete days[k];
-  queueWrite("p:profile", () => state.store.putDoc("profile", { kind: "profile", goal: state.profile.goal, days: { ...state.profile.days } }));
+  queueWrite("p:profile", () => state.store.putDoc("profile", { kind: "profile", goal: state.profile.goal, days: { ...state.profile.days }, badges: { ...state.profile.badges } }));
 }
 function markLog() {
   const log = state.log;
@@ -522,6 +556,10 @@ function recordAnswer(deck, u, g, now) {
   if (state.log.day !== day) state.log = { day, entries: [] };
   state.log.entries.push([u.card.i, u.dir, g, now, deck.id]);
   const days = state.profile.days;
+  if (!days[day]) {
+    const last = Object.keys(days).filter(k => k < day && days[k] > 0).sort().pop();
+    if (last && (new Date(day) - new Date(last)) / DAY >= 3) state.flags.comeback = true;
+  }
   days[day] = (days[day] || 0) + 1;
   markLog(); markProfile();
   if (days[day] === state.profile.goal) toast("Tagesziel erreicht. Serie: " + streakInfo().n + (streakInfo().n === 1 ? " Tag" : " Tage") + ".");
@@ -533,6 +571,75 @@ function unrecordAnswer() {
   state.profile.days[day] = Math.max(0, (state.profile.days[day] || 0) - 1);
   markLog(); markProfile();
 }
+/* ---------- Gamification: Fächer, Fortschritt, Abzeichen ----------
+   Everything rewards real memory and regular practice, never "correct" ratings,
+   so there is no reason to rate a card better than it went. */
+const FAECHER = [
+  { name: "Neu", sub: "noch nie gesehen" },
+  { name: "Fach 1", sub: "unter 1 Tag" },
+  { name: "Fach 2", sub: "1–7 Tage" },
+  { name: "Fach 3", sub: "1–3 Wochen" },
+  { name: "Fach 4", sub: "3 Wochen bis 3 Monate" },
+  { name: "Fach 5", sub: "über 3 Monate" }
+];
+// Compartment from stability: how many days the card stays at 90 % recall.
+function fachOf(st) {
+  if (!st) return 0;
+  if (isLearning(st) || st.s < 1) return 1;
+  return st.s < 7 ? 2 : st.s < 21 ? 3 : st.s < 90 ? 4 : 5;
+}
+const TIERS = [{ min: 75, name: "Gold", color: "--gold" }, { min: 50, name: "Silber", color: "--silver" }, { min: 25, name: "Bronze", color: "--bronze" }];
+function deckProgress(deck) {
+  const counts = [0, 0, 0, 0, 0, 0];
+  for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) counts[fachOf(c["s" + dir])]++;
+  const units = counts.reduce((a, n) => a + n, 0);
+  const pct = units ? Math.round(counts.reduce((a, n, f) => a + n * f, 0) / (5 * units) * 100) : 0;
+  return { counts, units, pct, tier: TIERS.find(t => pct >= t.min) || null };
+}
+const BADGES = [
+  { id: "first", mark: "1", name: "Erster Schritt", hint: "Beantworte deine erste Karte." },
+  { id: "streak3", mark: "3", name: "Dranbleiben", hint: "Erreiche 3 Tage in Folge dein Tagesziel." },
+  { id: "streak7", mark: "7", name: "Eine Woche", hint: "Erreiche 7 Tage in Folge dein Tagesziel." },
+  { id: "streak30", mark: "30", name: "Ein Monat", hint: "Erreiche 30 Tage in Folge dein Tagesziel." },
+  { id: "comeback", mark: "↺", name: "Comeback", hint: "Lerne wieder nach mindestens 3 Tagen Pause." },
+  { id: "cleared", mark: "✓", name: "Alles erledigt", hint: "Arbeite an einem Tag alles Fällige in allen Stapeln ab." },
+  { id: "day50", mark: "50", name: "Ausdauer", hint: "Gib 50 Antworten an einem Tag." },
+  { id: "total100", mark: "100", name: "Hundert", hint: "Gib insgesamt 100 Antworten." },
+  { id: "total500", mark: "500", name: "Fünfhundert", hint: "Gib insgesamt 500 Antworten." },
+  { id: "total1000", mark: "1k", name: "Tausend", hint: "Gib insgesamt 1.000 Antworten." },
+  { id: "seenAll", mark: "A", name: "Alles gesehen", hint: "Lerne jede Karte eines Stapels mindestens einmal." },
+  { id: "fach4", mark: "F4", name: "Gefestigt", hint: "Bring eine Karte in Fach 4 (sitzt mindestens 3 Wochen)." },
+  { id: "fach5", mark: "F5", name: "Langzeitgedächtnis", hint: "Bring eine Karte in Fach 5 (sitzt über 3 Monate)." },
+  { id: "bronze", mark: "B", name: "Bronze", hint: "Erreiche 25 % Fortschritt in einem Stapel.", color: "--bronze" },
+  { id: "silver", mark: "S", name: "Silber", hint: "Erreiche 50 % Fortschritt in einem Stapel.", color: "--silver" },
+  { id: "gold", mark: "G", name: "Gold", hint: "Erreiche 75 % Fortschritt in einem Stapel.", color: "--gold" }
+];
+// Awards every badge whose condition now holds. Returns the new ones.
+function checkBadges({ silent = false } = {}) {
+  const have = state.profile.badges, days = state.profile.days, flags = state.flags;
+  const counts = Object.values(days);
+  const total = counts.reduce((a, n) => a + n, 0), best = Math.max(0, ...counts);
+  const streak = streakInfo().n, progress = state.decks.map(deckProgress);
+  const met = {
+    first: total >= 1, streak3: streak >= 3, streak7: streak >= 7, streak30: streak >= 30,
+    comeback: !!flags.comeback, cleared: !!flags.cleared,
+    day50: best >= 50, total100: total >= 100, total500: total >= 500, total1000: total >= 1000,
+    seenAll: progress.some(p => p.units > 0 && p.counts[0] === 0),
+    fach4: progress.some(p => p.counts[4] + p.counts[5] > 0), fach5: progress.some(p => p.counts[5] > 0),
+    bronze: progress.some(p => p.pct >= 25), silver: progress.some(p => p.pct >= 50), gold: progress.some(p => p.pct >= 75)
+  };
+  const fresh = BADGES.filter(b => met[b.id] && !have[b.id]);
+  if (!fresh.length) return [];
+  for (const b of fresh) have[b.id] = Date.now();
+  markProfile();
+  if (!silent) toast((fresh.length === 1 ? "Neues Abzeichen: " : "Neue Abzeichen: ") + fresh.map(b => b.name).join(", "));
+  return fresh;
+}
+// "Alles erledigt": nothing due and no new-card allowance left in any deck today.
+function allCleared() {
+  return state.decks.every(d => { const q = buildQueue(d); return !q.main.length && !q.learn.length; });
+}
+
 function dayShift(i) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + i); return d; }
 function streakInfo() {
   const days = state.profile.days, goal = state.profile.goal;
@@ -744,7 +851,7 @@ function startStudy(id) {
   const deck = deckById(id);
   const q = buildQueue(deck);
   if (!q.main.length && !q.learn.length) { toast("In diesem Stapel ist heute nichts mehr fällig."); return; }
-  state.session = { deckId: id, main: q.main, learn: q.learn, current: null, revealed: false, done: 0, first: new Map(), history: [], lastKey: null, started: Date.now(), finished: false };
+  state.session = { deckId: id, main: q.main, learn: q.learn, current: null, revealed: false, done: 0, first: new Map(), history: [], lastKey: null, started: Date.now(), finished: false, startFach: new Map(), lastMove: null, badges: [] };
   state.view = "study"; state.open = null;
   advance(); render();
 }
@@ -760,7 +867,12 @@ function nextUnit(s) {
 function advance() {
   const s = state.session;
   s.current = nextUnit(s); s.revealed = false; s.answer = null; s.preview = null;
-  if (!s.current) { s.finished = true; flush(); return; }
+  if (!s.current) {
+    s.finished = true;
+    if (allCleared()) state.flags.cleared = true;
+    s.badges.push(...checkBadges({ silent: true }));
+    flush(); return;
+  }
   Object.assign(s, pickMode(deckById(s.deckId), s.current));
 }
 function reveal() { const s = state.session; if (s && s.current && !s.revealed && s.mode === "flip") { s.revealed = true; render(); } }
@@ -768,7 +880,7 @@ function rate(g) {
   const s = state.session; if (!s || !s.current || !s.revealed) return;
   const deck = deckById(s.deckId), u = s.current, key = "s" + u.dir, k = ukey(u);
   const prev = u.card[key], now = Date.now();
-  s.history.push({ unit: u, prev: prev ? { ...prev } : null, main: [...s.main], learn: [...s.learn], done: s.done, newCount: deck.newCount, revCount: deck.revCount, wasFirst: !s.first.has(k), lastKey: s.lastKey });
+  s.history.push({ unit: u, prev: prev ? { ...prev } : null, main: [...s.main], learn: [...s.learn], done: s.done, newCount: deck.newCount, revCount: deck.revCount, wasFirst: !s.first.has(k), lastKey: s.lastKey, lastMove: s.lastMove });
   if (s.history.length > 50) s.history.shift();
   const next = previewFor(s).o[g - 1];
   u.card[key] = next;
@@ -777,7 +889,11 @@ function rate(g) {
   if (!s.first.has(k)) s.first.set(k, g);
   if (isLearning(next)) s.learn.push(u);
   recordAnswer(deck, u, g, now);
+  const from = fachOf(prev), to = fachOf(next);
+  if (!s.startFach.has(k)) s.startFach.set(k, { u, from });
+  s.lastMove = { from, to };
   s.done++; s.lastKey = k;
+  s.badges.push(...checkBadges());
   markChunk(deck, u.card.c); markMeta(deck);
   advance(); render();
 }
@@ -785,9 +901,9 @@ function undo() {
   const s = state.session; if (!s || !s.history.length) return;
   const h = s.history.pop(), deck = deckById(s.deckId);
   h.unit.card["s" + h.unit.dir] = h.prev;
-  s.main = h.main; s.learn = h.learn; s.done = h.done; s.lastKey = h.lastKey;
+  s.main = h.main; s.learn = h.learn; s.done = h.done; s.lastKey = h.lastKey; s.lastMove = h.lastMove;
   deck.newCount = h.newCount; deck.revCount = h.revCount;
-  if (h.wasFirst) s.first.delete(ukey(h.unit));
+  if (h.wasFirst) { s.first.delete(ukey(h.unit)); s.startFach.delete(ukey(h.unit)); }
   unrecordAnswer();
   s.current = h.unit; s.revealed = true; s.finished = false; s.mode = "flip"; s.options = null; s.answer = null; s.preview = null;
   markChunk(deck, h.unit.card.c); markMeta(deck);
@@ -946,7 +1062,7 @@ function homeHTML() {
   </header>`;
   if (state.loading) return head + `<p class="loading">Lade deine Stapel …</p>`;
   if (state.loadError) return head + `<div class="panel"><p class="error">${esc(state.loadError)}</p></div>`;
-  return head + todayHTML() + (state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML()) + decksHTML() + howHTML();
+  return head + todayHTML() + (state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML()) + decksHTML() + badgesHTML() + howHTML();
 }
 
 function dropHTML() {
@@ -1075,6 +1191,7 @@ function deckHTML(deck) {
       <div class="deck-main">
         <h3>${esc(deck.name)}</h3>
         <p class="counts">${due ? `<span class="c-rev">${due} fällig</span>` : `<span>0 fällig</span>`} · ${q.nNew ? `<span class="c-new">${q.nNew} neu</span>` : `0 neu`} · ${deck.cardCount} Karten</p>
+        ${masteryHTML(deck)}
       </div>
       <div class="deck-actions">
         <button class="btn ${nothing ? "ghost" : "primary"}" data-act="study" data-id="${deck.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Lernen"}</button>
@@ -1086,6 +1203,48 @@ function deckHTML(deck) {
   </li>`;
 }
 
+function masteryHTML(deck) {
+  const p = deckProgress(deck);
+  if (!p.units) return "";
+  const solid = p.counts[4] + p.counts[5];
+  const next = [...TIERS].reverse().find(t => p.pct < t.min);
+  return `<div class="mastery">
+    <div class="segbar" role="img" aria-label="${FAECHER.map((f, i) => f.name + ": " + p.counts[i]).join(", ")}">${p.counts.map((n, i) => n ? `<i class="f${i}" style="width:${n / p.units * 100}%"></i>` : "").join("")}</div>
+    <div class="mastery-line">
+      ${p.tier ? `<span class="tier" style="--t:var(${p.tier.color})">${p.tier.name}</span>` : ""}
+      <span>${p.pct} % Fortschritt · ${solid} gefestigt${next ? ` · ${next.name} ab ${next.min} %` : ""}</span>
+    </div>
+  </div>`;
+}
+
+function kastenHTML(deck) {
+  const p = deckProgress(deck), max = Math.max(1, ...p.counts);
+  return `<div>
+    <p class="eyebrow" style="margin-bottom:8px">Dein Karteikasten</p>
+    <div class="kasten">${p.counts.map((n, i) => {
+      const slices = n ? Math.max(1, Math.round(n / max * 12)) : 0;
+      return `<div class="fach"><div class="stack" aria-hidden="true">${`<i class="f${i}"></i>`.repeat(slices)}</div><b>${n}</b><span class="nm">${FAECHER[i].name}</span><span class="sub">${FAECHER[i].sub}</span></div>`;
+    }).join("")}</div>
+    <p class="muted small" style="margin-top:8px">Je weiter rechts, desto länger sitzt die Karte. Gewusste Karten rücken ein Fach weiter, vergessene fallen zurück in Fach 1. Die Angabe unter dem Fach ist die Zeit, die du die Karte voraussichtlich sicher behältst.</p>
+  </div>`;
+}
+
+function badgesHTML() {
+  if (!state.decks.length) return "";
+  const have = state.profile.badges;
+  const list = [...BADGES].sort((a, b) => (have[b.id] ? 1 : 0) - (have[a.id] ? 1 : 0));
+  const n = BADGES.filter(b => have[b.id]).length;
+  const fmt = t => new Date(t).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+  return `
+  <section aria-labelledby="badges-h">
+    <div class="sec-head"><h2 id="badges-h">Abzeichen</h2><span class="muted small">${n} von ${BADGES.length}</span></div>
+    <div class="badges">${list.map(b => `<div class="badge ${have[b.id] ? "on" : ""}" ${b.color ? `style="--b:var(${b.color})"` : ""}>
+      <span class="disc" aria-hidden="true">${esc(b.mark)}</span>
+      <span class="txt"><b>${esc(b.name)}</b><span>${have[b.id] ? "Erreicht am " + fmt(have[b.id]) : esc(b.hint)}</span></span>
+    </div>`).join("")}</div>
+  </section>`;
+}
+
 function statsHTML(deck) {
   const s = deckStats(deck);
   const max = Math.max(1, ...s.forecast);
@@ -1093,6 +1252,7 @@ function statsHTML(deck) {
   const labels = s.forecast.map((_, i) => i === 0 ? "Heute" : wd[new Date(Date.now() + i * DAY).getDay()]);
   return `
   <div class="panel">
+    ${kastenHTML(deck)}
     <div class="tiles">
       <div class="tile"><b>${s.fresh}</b><span>noch nie gesehen</span></div>
       <div class="tile"><b>${s.learning}</b><span>gerade in der Lernphase</span></div>
@@ -1253,7 +1413,7 @@ function studyHTML() {
     ${feedback}
     ${actions}
     <div class="study-foot">
-      <span>${hint}</span>
+      <span>${s.lastMove && !s.revealed ? `<span class="move-note">Letzte Karte: ${FAECHER[s.lastMove.from].name} → ${FAECHER[s.lastMove.to].name}. </span>` : ""}${hint}</span>
       <button class="linkish" data-act="undo" ${s.history.length ? "" : "disabled"}>Letzte Bewertung rückgängig (Z)</button>
     </div>
   </div>`;
@@ -1267,12 +1427,16 @@ function doneHTML(s, deck) {
   let tomorrow = 0;
   for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; if (st && (isLearning(st) || st.due <= eod + DAY)) tomorrow++; }
   const q = buildQueue(deck);
+  let up = 0, down = 0;
+  for (const { u, from } of s.startFach.values()) { const to = fachOf(ust(u)); if (to > from) up++; else if (to < from) down++; }
   return `
   <div class="study">
     <div class="panel done">
       <p class="eyebrow">${esc(deck.name)}</p>
       <p class="big">Für heute geschafft.</p>
       <p>${firsts.length} ${firsts.length === 1 ? "Karte" : "Karten"} in ${mins} Min. Beim ersten Versuch gewusst: <b>${pct(ok)}</b>.</p>
+      ${up || down ? `<p>${up} ${up === 1 ? "Karte" : "Karten"} in ein höheres Fach gerückt${down ? `, ${down} zurückgefallen` : ""}. ${(() => { const p = deckProgress(deck); return `Fortschritt im Stapel: <b>${p.pct} %</b>${p.tier ? ` (${p.tier.name})` : ""}.`; })()}</p>` : ""}
+      ${s.badges.length ? `<p>Neue Abzeichen: <b>${s.badges.map(b => esc(b.name)).join(", ")}</b>.</p>` : ""}
       <p>${(() => { const st = streakInfo(); return st.todayOk ? `Tagesziel erreicht (${st.today}/${state.profile.goal}). Serie: <b>${st.n} ${st.n === 1 ? "Tag" : "Tage"}</b>.` : `Tagesziel: ${st.today}/${state.profile.goal} Antworten. Noch ${state.profile.goal - st.today} in einem anderen Stapel, oder hol dir 10 neue Karten.`; })()}</p>
       <p class="muted">Morgen warten etwa ${tomorrow} Wiederholungen${(deck.newPerDay ?? 20) > 0 && q.unseen + q.nNew > 0 ? ` und bis zu ${deck.newPerDay ?? 20} neue Karten` : ""}. Am meisten bringt es, jeden Tag kurz zu lernen.</p>
       <div class="row-actions">
@@ -1382,6 +1546,7 @@ async function boot() {
       ? "Der Karteikasten-Server antwortet nicht. Prüfe im Terminal, ob er noch läuft (npm start), und lade die Seite neu."
       : "Deine Stapel konnten nicht geladen werden.";
   }
+  if (!state.loadError) checkBadges({ silent: true });
   state.loading = false; render();
 }
 async function loadAll() {
@@ -1393,7 +1558,7 @@ async function loadAll() {
     .sort((a, b) => (b.created || 0) - (a.created || 0));
   const today = dayKey();
   const [profile, log] = await withTimeout(Promise.all([state.store.getDoc("profile"), state.store.getDoc("log-" + today)]), 10000);
-  state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) } };
+  state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) }, badges: { ...(profile?.badges || {}) } };
   state.log = { day: today, entries: Array.isArray(log?.entries) ? log.entries : [] };
   // Before history existed: count today's answers from the decks.
   if (state.profile.days[today] == null) {
