@@ -309,6 +309,18 @@ th{background:transparent;font-family:var(--font-hand);text-transform:none;lette
 .fach b{font-family:var(--font-display);font-size:30px}
 .fach .nm{font-family:var(--font-hand)}
 
+/* Topics: a heading written in the margin, its sets listed underneath */
+.topic{display:flex;flex-direction:column;gap:10px;padding:14px 0 6px;border-top:2px solid var(--sketch)}
+.topic:first-of-type{border-top:0}
+.topic-head{display:flex;justify-content:space-between;align-items:center;gap:12px 16px;flex-wrap:wrap}
+.topic-name{font-family:var(--font-display);font-size:32px;font-weight:700;line-height:1.05;color:var(--accent)}
+.topic.loose .topic-name{color:var(--muted);font-size:26px}
+.topic .decks{padding-left:18px;border-left:2px dashed var(--line);margin-left:4px}
+.deck-picks{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.deck-picks legend{font-size:14px;font-weight:700;margin-bottom:6px}
+.set-note{font-family:var(--font-body);font-size:13px;color:var(--muted);font-weight:400}
+@media (max-width:600px){.topic .decks{padding-left:10px}}
+
 /* Badges are ink stamps */
 .badge .disc{font-family:var(--font-hand);font-size:15px;border:2px dashed var(--line)}
 .badge.on .disc{border:3px double var(--b);background:transparent;transform:rotate(-9deg)}
@@ -492,7 +504,7 @@ function recall(st, now) {
 // Intervals are computed once when the answer is shown, so the buttons show exactly what gets saved.
 function previewFor(s) {
   const k = ukey(s.current);
-  if (!s.preview || s.preview.key !== k) { const now = Date.now(); s.preview = { key: k, now, o: outcomes(ust(s.current), now, deckById(s.deckId).retention || 0.9) }; }
+  if (!s.preview || s.preview.key !== k) { const now = Date.now(); s.preview = { key: k, now, o: outcomes(ust(s.current), now, s.current.deck.retention || 0.9) }; }
   return s.preview;
 }
 
@@ -501,7 +513,7 @@ const enc = st => st ? [st.q, +st.s.toFixed(4), +st.d.toFixed(3), st.due, st.las
 const dec = a => Array.isArray(a) ? { q: a[0], s: a[1], d: a[2], due: a[3], last: a[4], reps: a[5], lapses: a[6], step: a[7] } : null;
 const toRow = c => ({ i: c.i, f: c.f, b: c.b, sf: enc(c.sf), sr: enc(c.sr) });
 const fromRow = r => ({ i: r.i, f: r.f, b: r.b, sf: dec(r.sf), sr: dec(r.sr), c: r._k || 0 });
-const META_KEYS = ["id", "name", "created", "dir", "newPerDay", "retention", "newDay", "newCount", "revDay", "revCount", "chunks", "cardCount", "mode"];
+const META_KEYS = ["id", "name", "created", "dir", "newPerDay", "retention", "newDay", "newCount", "revDay", "revCount", "chunks", "cardCount", "mode", "topic"];
 const metaOf = deck => { const m = { kind: "deck" }; for (const k of META_KEYS) m[k] = deck[k] ?? null; return m; };
 const clone = x => JSON.parse(JSON.stringify(x));
 
@@ -623,7 +635,10 @@ const state = {
   pasteOpen: false,
   profile: { goal: 20, days: {}, badges: {} }, // answers per day (goal + streak), earned badges with date
   flags: { comeback: false, cleared: false },   // one-off events of this visit that badges look at
-  log: { day: "", entries: [] }    // today's answer history: [cardId, dir, grade, time, deckId]
+  log: { day: "", entries: [] },   // today's answer history: [cardId, dir, grade, time, deckId]
+  topics: [],                      // [{ id, name, created }]; a deck links to one via deck.topic
+  topicEdit: null,                 // { id | null, name, deckIds: Set, confirmDelete } while the topic panel is open
+  lastTopic: ""
 };
 const deckById = id => state.decks.find(d => d.id === id);
 const dirsOf = deck => deck.dir === "b" ? ["f", "r"] : [deck.dir === "r" ? "r" : "f"];
@@ -634,6 +649,32 @@ function rollover(deck) {
   const t = dayKey();
   if (deck.newDay !== t) { deck.newDay = t; deck.newCount = 0; }
   if (deck.revDay !== t) { deck.revDay = t; deck.revCount = 0; }
+}
+
+/* ---------- Topics: several card sets about one subject ---------- */
+const topicById = id => state.topics.find(t => t.id === id);
+const decksOfTopic = id => state.decks.filter(d => d.topic === id);
+function saveTopics() {
+  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created })) }));
+}
+// Fach distribution across several decks (a topic), same shape as deckProgress().
+function progressOf(decks) {
+  const counts = [0, 0, 0, 0, 0, 0];
+  for (const d of decks) deckProgress(d).counts.forEach((n, i) => counts[i] += n);
+  const units = counts.reduce((a, n) => a + n, 0);
+  const pct = units ? Math.round(counts.reduce((a, n, f) => a + n * f, 0) / (5 * units) * 100) : 0;
+  return { counts, units, pct, tier: TIERS.find(t => pct >= t.min) || null };
+}
+
+// Reviews (most at risk first) with new cards spread evenly between them.
+function mixQueue(rev, fresh) {
+  const main = [];
+  let i = 0, j = 0;
+  while (i < rev.length || j < fresh.length) {
+    const takeNew = j < fresh.length && (i >= rev.length || j / fresh.length < i / rev.length);
+    main.push(takeNew ? fresh[j++] : rev[i++]);
+  }
+  return main;
 }
 
 /* Today's queue: forgotten-soonest reviews first, new cards spread in, siblings kept apart. */
@@ -648,24 +689,19 @@ function buildQueue(deck) {
     for (const dir of dirs) {
       const st = card["s" + dir];
       if (!st) continue;
-      if (isLearning(st)) due.push({ card, dir, pri: -1 });
-      else if (st.q === 2 && st.due <= eod) due.push({ card, dir, pri: recall(st, now) });
+      if (isLearning(st)) due.push({ card, dir, deck, pri: -1 });
+      else if (st.q === 2 && st.due <= eod) due.push({ card, dir, deck, pri: recall(st, now) });
     }
     if (due.length) { due.sort((a, b) => a.pri - b.pri); (due[0].pri < 0 ? learn : rev).push(due[0]); continue; }
-    if (!card["s" + dirs[0]]) fresh.push({ card, dir: dirs[0] });
-    else if (dirs.length > 1 && !card["s" + dirs[1]] && card["s" + dirs[0]].last < sod) fresh.push({ card, dir: dirs[1] });
+    if (!card["s" + dirs[0]]) fresh.push({ card, dir: dirs[0], deck });
+    else if (dirs.length > 1 && !card["s" + dirs[1]] && card["s" + dirs[0]].last < sod) fresh.push({ card, dir: dirs[1], deck });
   }
   const newLeft = Math.max(0, (deck.newPerDay ?? 20) - (deck.newCount || 0));
   const newPick = fresh.slice(0, newLeft);
   rev.sort((a, b) => a.pri - b.pri);
   learn.sort((a, b) => ust(a).due - ust(b).due);
-  const main = [];
-  let i = 0, j = 0;
-  while (i < rev.length || j < newPick.length) {
-    const takeNew = j < newPick.length && (i >= rev.length || j / newPick.length < i / rev.length);
-    main.push(takeNew ? newPick[j++] : rev[i++]);
-  }
-  return { main, learn, nRev: rev.length, nNew: newPick.length, nLearn: learn.length, unseen: fresh.length - newPick.length };
+  const main = mixQueue(rev, newPick);
+  return { main, learn, rev, fresh: newPick, nRev: rev.length, nNew: newPick.length, nLearn: learn.length, unseen: fresh.length - newPick.length };
 }
 
 /* ---------- Daily goal, streak, answer history ---------- */
@@ -974,11 +1010,18 @@ function dontKnow() {
 }
 
 /* ---------- Session ---------- */
-function startStudy(id) {
-  const deck = deckById(id);
-  const q = buildQueue(deck);
-  if (!q.main.length && !q.learn.length) { toast("In diesem Stapel ist heute nichts mehr fällig."); return; }
-  state.session = { deckId: id, main: q.main, learn: q.learn, current: null, revealed: false, done: 0, first: new Map(), history: [], lastKey: null, started: Date.now(), finished: false, startFach: new Map(), lastMove: null, badges: [] };
+function startStudy(id) { const deck = deckById(id); if (deck) startSession([deck], deck.name); }
+function startTopic(id) { const t = topicById(id); if (t) startSession(decksOfTopic(id), t.name, id); }
+function startSession(decks, title, topicId = null) {
+  const qs = decks.map(buildQueue);
+  const rev = qs.flatMap(q => q.rev).sort((a, b) => a.pri - b.pri);
+  const learn = qs.flatMap(q => q.learn).sort((a, b) => ust(a).due - ust(b).due);
+  // New cards take turns between the sets, so each set gets its share.
+  const lists = qs.map(q => q.fresh.slice()), fresh = [];
+  while (lists.some(l => l.length)) for (const l of lists) if (l.length) fresh.push(l.shift());
+  const main = mixQueue(rev, fresh);
+  if (!main.length && !learn.length) { toast(decks.length > 1 ? "In diesem Thema ist heute nichts mehr fällig." : "In diesem Stapel ist heute nichts mehr fällig."); return; }
+  state.session = { deckIds: decks.map(d => d.id), title, topicId, main, learn, current: null, revealed: false, done: 0, first: new Map(), history: [], lastKey: null, started: Date.now(), finished: false, startFach: new Map(), lastMove: null, badges: [] };
   state.view = "study"; state.open = null;
   advance(); render();
 }
@@ -1000,12 +1043,12 @@ function advance() {
     s.badges.push(...checkBadges({ silent: true }));
     flush(); return;
   }
-  Object.assign(s, pickMode(deckById(s.deckId), s.current));
+  Object.assign(s, pickMode(s.current.deck, s.current));
 }
 function reveal() { const s = state.session; if (s && s.current && !s.revealed && s.mode === "flip") { s.revealed = true; render(); } }
 function rate(g) {
   const s = state.session; if (!s || !s.current || !s.revealed) return;
-  const deck = deckById(s.deckId), u = s.current, key = "s" + u.dir, k = ukey(u);
+  const u = s.current, deck = u.deck, key = "s" + u.dir, k = ukey(u);
   const prev = u.card[key], now = Date.now();
   s.history.push({ unit: u, prev: prev ? { ...prev } : null, main: [...s.main], learn: [...s.learn], done: s.done, newCount: deck.newCount, revCount: deck.revCount, wasFirst: !s.first.has(k), lastKey: s.lastKey, lastMove: s.lastMove });
   if (s.history.length > 50) s.history.shift();
@@ -1026,7 +1069,7 @@ function rate(g) {
 }
 function undo() {
   const s = state.session; if (!s || !s.history.length) return;
-  const h = s.history.pop(), deck = deckById(s.deckId);
+  const h = s.history.pop(), deck = h.unit.deck;
   h.unit.card["s" + h.unit.dir] = h.prev;
   s.main = h.main; s.learn = h.learn; s.done = h.done; s.lastKey = h.lastKey; s.lastMove = h.lastMove;
   deck.newCount = h.newCount; deck.revCount = h.revCount;
@@ -1115,7 +1158,7 @@ function doImport() {
     assignChunks(deck);
     toast(added + " neue Karten, " + updated + " aktualisiert. Dein Lernstand bleibt erhalten.");
   } else {
-    const deck = { id: rid(), name: (d.name || "Neuer Stapel").trim().slice(0, 120), created: Date.now(), dir: "f", mode: "auto", newPerDay: 20, retention: 0.9, newDay: "", newCount: 0, revDay: "", revCount: 0, chunks: 0, cardCount: 0 };
+    const deck = { id: rid(), name: (d.name || "Neuer Stapel").trim().slice(0, 120), created: Date.now(), dir: "f", mode: "auto", topic: topicById(d.topic ?? state.lastTopic) ? (d.topic ?? state.lastTopic) : null, newPerDay: 20, retention: 0.9, newDay: "", newCount: 0, revDay: "", revCount: 0, chunks: 0, cardCount: 0 };
     state.decks.unshift(deck);
     state.cards[deck.id] = pairs.map(([f, b]) => ({ i: rid(), f, b, sf: null, sr: null, c: 0 }));
     assignChunks(deck);
@@ -1275,6 +1318,9 @@ function importHTML() {
     ${width < 2 ? `<p class="error">Die Datei hat nur eine Spalte. Jede Zeile braucht Vorderseite und Rückseite, getrennt durch Komma, Semikolon oder Tab.</p>` : `
     <div class="form-grid">
       ${target ? `<label class="field">Ziel<input type="text" id="imp-target" value="${esc(target.name)}" disabled></label>` : `<label class="field">Name des Stapels<input type="text" id="imp-name" value="${esc(d.name)}" maxlength="120"></label>`}
+      ${!target && state.topics.length ? `<label class="field">Thema<select id="imp-topic">
+        <option value="">Ohne Thema</option>${state.topics.map(t => `<option value="${t.id}" ${(d.topic ?? state.lastTopic) === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+      </select></label>` : ""}
       <label class="field">Vorderseite (Frage)<select id="imp-f">${opts(d.fc)}</select></label>
       <label class="field">Rückseite (Antwort)<select id="imp-b">${opts(d.bc)}</select></label>
     </div>
@@ -1303,11 +1349,63 @@ function decksHTML() {
       </div>
     </section>`;
   }
+  const topics = state.topics, loose = state.decks.filter(d => !d.topic || !topicById(d.topic));
+  const creating = state.topicEdit && !state.topicEdit.id;
   return `
   <section aria-labelledby="decks-h">
-    <div class="sec-head"><h2 id="decks-h">Deine Stapel</h2><span class="muted small">${state.decks.length} ${state.decks.length === 1 ? "Stapel" : "Stapel"}</span></div>
-    <ul class="decks">${state.decks.map(deckHTML).join("")}</ul>
+    <div class="sec-head"><h2 id="decks-h">${topics.length ? "Deine Themen" : "Deine Stapel"}</h2>
+      <button class="btn ghost sm" data-act="topic-new" aria-pressed="${!!creating}">Neues Thema</button></div>
+    ${creating ? topicEditHTML() : ""}
+    ${!topics.length && !creating ? `<p class="muted small">Tipp: Bündle Kartensets zu einem Thema, z. B. alle Sets einer Vorlesung. Dann lernst du sie in einer Runde.</p>` : ""}
+    ${topics.map(topicHTML).join("")}
+    ${loose.length ? (topics.length
+      ? `<div class="topic loose"><div class="topic-head"><h3 class="topic-name">Ohne Thema</h3></div><ul class="decks">${loose.map(deckHTML).join("")}</ul></div>`
+      : `<ul class="decks">${loose.map(deckHTML).join("")}</ul>`) : ""}
   </section>`;
+}
+
+function topicHTML(t) {
+  const decks = decksOfTopic(t.id), qs = decks.map(buildQueue);
+  const due = qs.reduce((a, q) => a + q.nRev + q.nLearn, 0), fresh = qs.reduce((a, q) => a + q.nNew, 0);
+  const cards = decks.reduce((a, d) => a + (d.cardCount || 0), 0), nothing = !due && !fresh;
+  const editing = state.topicEdit?.id === t.id;
+  return `
+  <div class="topic">
+    <div class="topic-head">
+      <div class="deck-main">
+        <h3 class="topic-name">${esc(t.name)}</h3>
+        <p class="counts">${due ? `<span class="c-rev">${due} fällig</span>` : "0 fällig"} · ${fresh ? `<span class="c-new">${fresh} neu</span>` : "0 neu"} · ${decks.length} ${decks.length === 1 ? "Set" : "Sets"} · ${cards} Karten</p>
+        ${masteryBar(progressOf(decks), "Thema")}
+      </div>
+      <div class="deck-actions">
+        <button class="btn ${nothing ? "ghost" : "primary"}" data-act="study-topic" data-id="${t.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Thema lernen"}</button>
+        <button class="btn ghost" data-act="topic-edit" data-id="${t.id}" aria-pressed="${editing}">Bearbeiten</button>
+      </div>
+    </div>
+    ${editing ? topicEditHTML() : ""}
+    ${decks.length ? `<ul class="decks">${decks.map(deckHTML).join("")}</ul>` : `<p class="muted small">Noch keine Kartensets. Ordne sie unter „Bearbeiten“ zu.</p>`}
+  </div>`;
+}
+
+function topicEditHTML() {
+  const te = state.topicEdit;
+  return `
+  <div class="panel topic-edit">
+    <label class="field">Name des Themas<input type="text" id="topic-name" value="${esc(te.name)}" maxlength="80" placeholder="z. B. Digitale Innovationsstrategie"></label>
+    <fieldset class="deck-picks"><legend>Kartensets in diesem Thema</legend>
+      ${state.decks.length ? state.decks.map(d => {
+        const other = d.topic && d.topic !== te.id && topicById(d.topic);
+        return `<label class="check"><input type="checkbox" class="topic-deck" value="${d.id}" ${te.deckIds.has(d.id) ? "checked" : ""}> ${esc(d.name)}${other ? ` <span class="muted small">(jetzt in „${esc(other.name)}“)</span>` : ""}</label>`;
+      }).join("") : `<p class="muted small">Noch keine Kartensets vorhanden.</p>`}
+    </fieldset>
+    <div class="row-actions">
+      <button class="btn primary" data-act="topic-save">${te.id ? "Speichern" : "Thema anlegen"}</button>
+      <button class="btn ghost" data-act="topic-cancel">Abbrechen</button>
+      ${te.id ? (te.confirmDelete
+        ? `<span class="small">Thema löschen? Die Kartensets bleiben erhalten.</span><button class="btn danger solid sm" data-act="topic-del-yes">Thema löschen</button><button class="btn ghost sm" data-act="topic-del-no">Behalten</button>`
+        : `<button class="btn danger" data-act="topic-del">Thema löschen</button>`) : ""}
+    </div>
+  </div>`;
 }
 
 function deckHTML(deck) {
@@ -1333,8 +1431,8 @@ function deckHTML(deck) {
   </li>`;
 }
 
-function masteryHTML(deck) {
-  const p = deckProgress(deck);
+function masteryHTML(deck) { return masteryBar(deckProgress(deck)); }
+function masteryBar(p) {
   if (!p.units) return "";
   const solid = p.counts[4] + p.counts[5];
   const next = [...TIERS].reverse().find(t => p.pct < t.min);
@@ -1410,6 +1508,9 @@ function settingsHTML(deck) {
   <div class="panel">
     <div class="form-grid">
       <label class="field">Name<input type="text" id="set-name" data-id="${deck.id}" value="${esc(deck.name)}" maxlength="120"></label>
+      ${state.topics.length ? `<label class="field">Thema<select id="set-topic" data-id="${deck.id}">
+        <option value="">Ohne Thema</option>${state.topics.map(t => `<option value="${t.id}" ${deck.topic === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+      </select></label>` : ""}
       <label class="field">Neue Karten pro Tag<input type="number" id="set-new" data-id="${deck.id}" min="0" max="500" value="${deck.newPerDay ?? 20}"><span class="hint">Jede neue Karte bringt in den nächsten Tagen etwa 5–10 Wiederholungen mit.</span></label>
       <label class="field">Abfragerichtung<select id="set-dir" data-id="${deck.id}">
         <option value="f" ${deck.dir === "f" ? "selected" : ""}>Vorderseite → Rückseite</option>
@@ -1453,9 +1554,9 @@ function howHTML() {
 }
 
 function studyHTML() {
-  const s = state.session, deck = deckById(s.deckId);
-  if (s.finished) return doneHTML(s, deck);
-  const u = s.current, st = ust(u), now = Date.now();
+  const s = state.session;
+  if (s.finished) return doneHTML(s);
+  const u = s.current, deck = u.deck, st = ust(u), now = Date.now();
   const cntNew = s.main.filter(x => !ust(x)).length + (!st ? 1 : 0);
   const cntLearn = s.learn.length + (isLearning(st) ? 1 : 0);
   const cntRev = s.main.filter(x => ust(x)?.q === 2).length + (st?.q === 2 ? 1 : 0);
@@ -1527,7 +1628,7 @@ function studyHTML() {
   <div class="study">
     <div class="study-bar">
       <button class="btn ghost sm" data-act="exit">← Beenden</button>
-      <div class="name">${esc(deck.name)}</div>
+      <div class="name">${esc(s.title)}${s.deckIds.length > 1 ? `<span class="set-note"> · ${esc(deck.name)}</span>` : ""}</div>
       <div class="qcounts" aria-label="Noch in dieser Runde">
         <span class="c-new">${cntNew}<small>neu</small></span>
         <span class="c-learn">${cntLearn}<small>lernen</small></span>
@@ -1549,29 +1650,31 @@ function studyHTML() {
   </div>`;
 }
 
-function doneHTML(s, deck) {
+function doneHTML(s) {
+  const decks = s.deckIds.map(deckById).filter(Boolean), many = decks.length > 1;
   const mins = Math.max(1, Math.round((Date.now() - s.started) / MIN));
   const firsts = [...s.first.values()];
   const ok = firsts.length ? firsts.filter(g => g >= 2).length / firsts.length : 0;
   const eod = endOfToday();
   let tomorrow = 0;
-  for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; if (st && (isLearning(st) || st.due <= eod + DAY)) tomorrow++; }
-  const q = buildQueue(deck);
+  for (const deck of decks) for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; if (st && (isLearning(st) || st.due <= eod + DAY)) tomorrow++; }
+  const qs = decks.map(buildQueue);
+  const unseen = qs.reduce((a, q) => a + q.unseen, 0), newTomorrow = decks.reduce((a, d, i) => a + (qs[i].unseen + qs[i].nNew > 0 ? (d.newPerDay ?? 20) : 0), 0);
   let up = 0, down = 0;
   for (const { u, from } of s.startFach.values()) { const to = fachOf(ust(u)); if (to > from) up++; else if (to < from) down++; }
   return `
   <div class="study">
     <div class="panel done">
-      <p class="eyebrow">${esc(deck.name)}</p>
+      <p class="eyebrow">${esc(s.title)}</p>
       <p class="big">Für heute geschafft.</p>
       <p>${firsts.length} ${firsts.length === 1 ? "Karte" : "Karten"} in ${mins} Min. Beim ersten Versuch gewusst: <b>${pct(ok)}</b>.</p>
-      ${up || down ? `<p>${up} ${up === 1 ? "Karte" : "Karten"} in ein höheres Fach gerückt${down ? `, ${down} zurückgefallen` : ""}. ${(() => { const p = deckProgress(deck); return `Fortschritt im Stapel: <b>${p.pct} %</b>${p.tier ? ` (${p.tier.name})` : ""}.`; })()}</p>` : ""}
+      ${up || down ? `<p>${up} ${up === 1 ? "Karte" : "Karten"} in ein höheres Fach gerückt${down ? `, ${down} zurückgefallen` : ""}. ${(() => { const p = progressOf(decks); return `Fortschritt ${many ? "im Thema" : "im Stapel"}: <b>${p.pct} %</b>${p.tier ? ` (${p.tier.name})` : ""}.`; })()}</p>` : ""}
       ${s.badges.length ? `<p>Neue Abzeichen: <b>${s.badges.map(b => esc(b.name)).join(", ")}</b>.</p>` : ""}
       <p>${(() => { const st = streakInfo(); return st.todayOk ? `Tagesziel erreicht (${st.today}/${state.profile.goal}). Serie: <b>${st.n} ${st.n === 1 ? "Tag" : "Tage"}</b>.` : `Tagesziel: ${st.today}/${state.profile.goal} Antworten. Noch ${state.profile.goal - st.today} in einem anderen Stapel, oder hol dir 10 neue Karten.`; })()}</p>
-      <p class="muted">Morgen warten etwa ${tomorrow} Wiederholungen${(deck.newPerDay ?? 20) > 0 && q.unseen + q.nNew > 0 ? ` und bis zu ${deck.newPerDay ?? 20} neue Karten` : ""}. Am meisten bringt es, jeden Tag kurz zu lernen.</p>
+      <p class="muted">Morgen warten etwa ${tomorrow} Wiederholungen${newTomorrow > 0 ? ` und bis zu ${newTomorrow} neue Karten` : ""}. Am meisten bringt es, jeden Tag kurz zu lernen.</p>
       <div class="row-actions">
         <button class="btn primary" data-act="exit" data-autofocus>Zur Übersicht</button>
-        ${q.unseen > 0 ? `<button class="btn ghost" data-act="more-new" data-id="${deck.id}">10 weitere neue Karten</button>` : ""}
+        ${unseen > 0 ? `<button class="btn ghost" data-act="more-new">10 weitere neue Karten${many ? " je Set" : ""}</button>` : ""}
       </div>
     </div>
   </div>`;
@@ -1582,6 +1685,30 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === "study") startStudy(id);
+  else if (act === "study-topic") startTopic(id);
+  else if (act === "topic-new") { state.topicEdit = state.topicEdit && !state.topicEdit.id ? null : { id: null, name: "", deckIds: new Set(state.decks.filter(d => !d.topic || !topicById(d.topic)).map(d => d.id)), confirmDelete: false }; render(); $("#topic-name")?.focus(); }
+  else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false }; render(); }
+  else if (act === "topic-cancel") { state.topicEdit = null; render(); }
+  else if (act === "topic-del") { state.topicEdit.confirmDelete = true; render(); }
+  else if (act === "topic-del-no") { state.topicEdit.confirmDelete = false; render(); }
+  else if (act === "topic-del-yes") {
+    const tid = state.topicEdit.id;
+    for (const d of decksOfTopic(tid)) { d.topic = null; markMeta(d); }
+    state.topics = state.topics.filter(t => t.id !== tid); saveTopics();
+    state.topicEdit = null; toast("Thema gelöscht. Die Kartensets sind jetzt unter „Ohne Thema“."); render();
+  }
+  else if (act === "topic-save") {
+    const te = state.topicEdit, name = (te.name || "").trim().slice(0, 80);
+    if (!name) { toast("Gib dem Thema einen Namen."); $("#topic-name")?.focus(); return; }
+    let t = te.id && topicById(te.id);
+    if (t) t.name = name; else { t = { id: rid(), name, created: Date.now() }; state.topics.push(t); }
+    for (const d of state.decks) {
+      const want = te.deckIds.has(d.id) ? t.id : (d.topic === t.id ? null : d.topic);
+      if ((d.topic || null) !== (want || null)) { d.topic = want; markMeta(d); }
+    }
+    saveTopics(); state.lastTopic = t.id; state.topicEdit = null;
+    toast(te.id ? "Thema gespeichert." : `Thema „${name}“ angelegt.`); render();
+  }
   else if (act === "tab") { state.open = state.open?.id === id && state.open.tab === b.dataset.tab ? null : { id, tab: b.dataset.tab }; state.confirmDelete = null; render(); }
   else if (act === "reveal") reveal();
   else if (act === "choose") chooseOption(+b.dataset.i);
@@ -1605,7 +1732,10 @@ document.addEventListener("click", e => {
     state.confirmDelete = null; state.open = null; toast("Stapel gelöscht."); render();
   }
   else if (act === "more-new") {
-    const deck = deckById(id); deck.newCount = (deck.newCount || 0) - 10; markMeta(deck); startStudy(id);
+    const s = state.session; if (!s) return;
+    const decks = s.deckIds.map(deckById).filter(Boolean);
+    for (const d of decks) if (buildQueue(d).unseen > 0) { d.newCount = (d.newCount || 0) - 10; markMeta(d); }
+    startSession(decks, s.title, s.topicId);
   }
 });
 document.addEventListener("change", e => {
@@ -1617,6 +1747,9 @@ document.addEventListener("change", e => {
   else if (t.id === "imp-head" && d) { d.header = t.checked; render(); }
   else if (t.id === "set-name") { const deck = deckById(t.dataset.id); const v = t.value.trim(); if (v) { deck.name = v.slice(0, 120); markMeta(deck); render(); } }
   else if (t.id === "set-new") { const deck = deckById(t.dataset.id); deck.newPerDay = Math.max(0, Math.min(500, Math.round(+t.value || 0))); markMeta(deck); render(); }
+  else if (t.id === "set-topic") { const deck = deckById(t.dataset.id); deck.topic = t.value || null; markMeta(deck); render(); }
+  else if (t.id === "imp-topic" && d) { d.topic = t.value; state.lastTopic = t.value; }
+  else if (t.classList?.contains("topic-deck") && state.topicEdit) { t.checked ? state.topicEdit.deckIds.add(t.value) : state.topicEdit.deckIds.delete(t.value); }
   else if (t.id === "set-mode") { const deck = deckById(t.dataset.id); deck.mode = t.value; markMeta(deck); render(); }
   else if (t.id === "set-dir") { const deck = deckById(t.dataset.id); deck.dir = t.value; markMeta(deck); render(); }
   else if (t.id === "goal-sel") { state.profile.goal = Math.max(1, +t.value || 20); markProfile(); render(); }
@@ -1629,6 +1762,7 @@ document.addEventListener("submit", e => {
 document.addEventListener("input", e => {
   const t = e.target;
   if (t.id === "imp-name" && state.draft) state.draft.name = t.value;
+  if (t.id === "topic-name" && state.topicEdit) state.topicEdit.name = t.value;
   if (t.id === "set-ret") { const o = $("#ret-out"); if (o) o.textContent = t.value + " %"; }
 });
 document.addEventListener("dragover", e => { if (state.view !== "home") return; e.preventDefault(); $("#drop")?.classList.add("over"); });
@@ -1687,7 +1821,8 @@ async function loadAll() {
   state.decks = metas.map(m => ({ ...m, dir: m.dir || "f", mode: m.mode || "auto", newPerDay: m.newPerDay ?? 20, retention: m.retention || 0.9, newCount: m.newCount || 0, revCount: m.revCount || 0 }))
     .sort((a, b) => (b.created || 0) - (a.created || 0));
   const today = dayKey();
-  const [profile, log] = await withTimeout(Promise.all([state.store.getDoc("profile"), state.store.getDoc("log-" + today)]), 10000);
+  const [profile, log, topics] = await withTimeout(Promise.all([state.store.getDoc("profile"), state.store.getDoc("log-" + today), state.store.getDoc("topics")]), 10000);
+  state.topics = Array.isArray(topics?.list) ? topics.list : [];
   state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) }, badges: { ...(profile?.badges || {}) } };
   state.log = { day: today, entries: Array.isArray(log?.entries) ? log.entries : [] };
   // Before history existed: count today's answers from the decks.
