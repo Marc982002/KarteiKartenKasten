@@ -548,10 +548,10 @@ const answerOf = u => u.dir === "f" ? u.card.b : u.card.f;
 const typeable = t => t.length <= 60 && !t.includes("\n");
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const normA = t => String(t).toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[.,!?;:"'„“”‚‘’«»¿¡…*]/g, " ").replace(/\s+/g, " ").trim();
-// *Sternchen* in a card mark key terms. plain() removes the marks for display and comparison.
-const MARK = /\*([^*\n]+)\*/g;
+// *Sternchen* or **Fettschrift** (as AI tools write it) mark key terms. plain() removes the marks.
+const MARK = /\*{1,2}([^*\n]+?)\*{1,2}/g;
 const plain = t => String(t).replace(MARK, "$1");
-const hasMarks = t => /\*[^*\n]+\*/.test(t);
+const hasMarks = t => /\*{1,2}[^*\n]+?\*{1,2}/.test(t);
 const stripMarks = t => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss");
 const ARTICLES = /^(der|die|das|den|dem|des|ein|eine|einen|the|a|an|to|el|la|los|las|le|les|l|un|une|il|lo|gli)\s+/;
 function lev(a, b) {
@@ -588,26 +588,65 @@ function checkAnswer(given, correct) {
   return best;
 }
 /* Long answers: check whether the key terms appear in what was typed. */
-const STOPWORDS = new Set(("der die das den dem des ein eine einer eines einem einen kein keine und oder aber auch als am an auf aus bei bis "
-  + "durch fur gegen im in ins ist sind war waren wird werden wurde wurden sein seine ihre hat haben hatte mit nach nicht nur noch von vor zu zum zur "
-  + "uber unter um wie wo was wer wenn dass so sich sie er es wir ihr ich du man dies diese dieser dieses diesem jede jeder jedes kann konnen muss "
-  + "mussen soll sollen sehr mehr meist etwa bzw usw etc dabei dadurch damit dann denn doch hier dort zwei drei viele andere anderen "
-  + "the a an and or of to in on at by for with from is are was were be been as that this these those it its into than then which who what when "
-  + "where why how not no can may must should would will do does did has have had also such via per").split(" "));
+const STOPWORDS = new Set(("der die das den dem des ein eine einer eines einem einen kein keine und oder aber auch als am an auf aus bei beim bis "
+  + "durch fur gegen im in ins ist sind war waren wird werden wurde wurden worden sein seine seinen seinem seiner ihre ihren ihrem ihrer hat haben hatte "
+  + "mit nach nicht nur noch von vom vor zu zum zur uber unter um wie wo was wer wenn dass so sich sie er es wir ihr ich du man dies diese dieser dieses "
+  + "diesem jede jeder jedes kann konnen konnte muss mussen soll sollen sehr mehr weniger meist etwa bzw usw etc dabei dadurch damit dann denn doch hier "
+  + "dort zwei drei viele andere anderen lediglich eigentlich grundlegend anstatt statt also sowie beispielsweise jedoch bereits daher deshalb somit "
+  + "zudem ebenfalls eher besonders insbesondere gleichzeitig hingegen vielmehr sondern weil ob ohne zwischen innerhalb gibt geht eigene eigenen eigener "
+  + "neue neuen neuer alle allen allem aller ganz ganze gesamte gesamten reine reinen reiner bestehende bestehenden lassen etwas immer wieder schon "
+  + "einfach dessen deren denen welche welcher welches indem wobei sodass zwar trotzdem allerdings ebenso stets jeweils unsere unser vgl "
+  + "the a an and or of to in on at by for with from is are was were be been being as that this these those it its into than then which who what when "
+  + "where why how not no can may must should would will do does did has have had also such via per each other only own same some any more most "
+  + "them they their there through during before after about").split(" "));
 const kn = w => stripMarks(w.toLowerCase());
 const wordsOf = t => plain(t).match(/[\p{L}\p{N}][\p{L}\p{N}-]*/gu) || [];
+const isTerm = n => n.length >= 3 && !STOPWORDS.has(n);
+const termsOf = t => wordsOf(t).map(kn).filter(isTerm);
+// Brackets that hold a source or an example, not a second name for the term.
+const PAREN_SKIP = /^\s*(vgl|z\.?\s*b|bzw|siehe|s\.|e\.?\s*g|i\.?\s*e|etc|u\.?\s*a|wie|etwa|zum beispiel|beispielsweise|such as|like)\b|^[\s\d.,:;–-]*$/i;
+
+// A key term has one or more alternatives ("Scope (Reichweite)": either counts).
+// need "all": every word of one alternative must appear; "half": at least half of them.
 function keywordsOf(answer) {
-  const marked = [...answer.matchAll(MARK)].map(m => m[1].trim()).filter(Boolean);
-  if (marked.length) return { marked: true, list: marked.map(p => ({ label: p, words: wordsOf(p).map(kn) })).filter(k => k.words.length) };
-  const seen = new Set(), cands = [];
-  wordsOf(answer).forEach((w, i) => {
-    const n = kn(w), num = /\d/.test(n);
-    if (STOPWORDS.has(n) || (n.length < 3 && !num) || seen.has(n)) return;
-    seen.add(n);
-    cands.push({ label: w, words: [n], i, score: n.length + (/^\p{Lu}/u.test(w) ? 4 : 0) + (num ? 6 : 0) });
+  const text = String(answer);
+  const marks = [...text.matchAll(MARK)];
+  if (marks.length) {
+    const list = marks.map(m => {
+      const after = text.slice(m.index + m[0].length).match(/^\s*\(([^()]{1,80})\)/);
+      const alt = after && !PAREN_SKIP.test(after[1]) ? after[1].trim() : null;
+      const alts = [m[1], alt].filter(Boolean).map(p => { const t = termsOf(p); return t.length ? t : wordsOf(p).map(kn); }).filter(a => a.length);
+      return { label: [m[1].trim(), alt].filter(Boolean).join(" / "), alts, need: "all" };
+    }).filter(k => k.alts.length);
+    return { marked: true, list };
+  }
+  // Automatic: split into words and bracket groups.
+  const toks = [];
+  for (const m of text.matchAll(/\(([^()]*)\)|([\p{L}\p{N}][\p{L}\p{N}-]*)/gu)) toks.push(m[1] !== undefined ? { paren: m[1] } : { w: m[2], n: kn(m[2]) });
+  const units = [], seen = new Set(), used = new Set();
+  // "Begriff (Übersetzung)" becomes one term with two alternatives.
+  toks.forEach((t, i) => {
+    if (t.paren === undefined || PAREN_SKIP.test(t.paren)) return;
+    const inner = termsOf(t.paren);
+    if (!inner.length || inner.length > 4) return;
+    const left = [];
+    for (let j = i - 1; j >= 0 && left.length < Math.min(3, inner.length); j--) {
+      if (toks[j].paren !== undefined) break;
+      if (isTerm(toks[j].n) && !used.has(j)) left.unshift(j);
+    }
+    if (!left.length) return;
+    const leftWords = left.map(j => toks[j].n), key = leftWords.join(" ");
+    if (seen.has(key)) return;
+    left.forEach(j => used.add(j)); seen.add(key); leftWords.forEach(n => seen.add(n)); inner.forEach(n => seen.add(n));
+    units.push({ label: left.map(j => toks[j].w).join(" ") + " / " + t.paren.trim(), alts: [leftWords, inner], need: "half", i: left[0], score: 30 });
   });
-  // Very long answers: keep the 8 most telling terms (long words, nouns, numbers), in their original order.
-  const list = cands.length > 8 ? cands.slice().sort((a, b) => b.score - a.score).slice(0, 8).sort((a, b) => a.i - b.i) : cands;
+  // Remaining single words: prefer nouns and technical terms (capitalised), long words, numbers.
+  toks.forEach((t, i) => {
+    if (t.paren !== undefined || used.has(i) || !isTerm(t.n) || seen.has(t.n)) return;
+    seen.add(t.n);
+    units.push({ label: t.w, alts: [[t.n]], need: "all", i, score: Math.min(t.n.length, 12) + (/^\p{Lu}/u.test(t.w) ? 6 : 0) + (/\d/.test(t.n) ? 4 : 0) });
+  });
+  const list = units.length > 7 ? units.slice().sort((a, b) => b.score - a.score).slice(0, 7).sort((a, b) => a.i - b.i) : units;
   return { marked: false, list };
 }
 // One key word counts as found despite endings (chemisch/chemischen), compounds (Sonnenlichtenergie) or a small typo.
@@ -623,29 +662,36 @@ function wordHit(kw, tokens) {
   }
   return false;
 }
+const unitHit = (k, tokens) => k.alts.some(a => {
+  const h = a.filter(w => wordHit(w, tokens)).length;
+  return k.need === "all" ? h === a.length : h >= Math.ceil(a.length / 2);
+});
 function checkKeywords(given, answer) {
   const kws = keywordsOf(answer);
   if (!kws.list.length) return null;
   const ws = wordsOf(given).map(kn);
   const tokens = [...ws, ...ws.slice(1).map((w, i) => ws[i] + w)]; // "Licht Energie" also matches "Lichtenergie"
   const found = [], missing = [];
-  for (const k of kws.list) (k.words.every(w => wordHit(w, tokens)) ? found : missing).push(k);
+  for (const k of kws.list) (unitHit(k, tokens) ? found : missing).push(k);
   const ratio = found.length / kws.list.length;
-  const verdict = !ws.length ? "empty" : ratio >= 0.8 ? "right" : ratio >= 0.5 ? "close" : "wrong";
+  // Terms the user marked are reliable, so they need more hits than automatically chosen ones.
+  const [good, ok] = kws.marked ? [0.8, 0.5] : [0.6, 0.3];
+  const verdict = !ws.length ? "empty" : ratio >= good ? "right" : ratio >= ok ? "close" : "wrong";
   return { method: "keywords", marked: kws.marked, found, missing, ratio, verdict, suggest: verdict === "right" ? 3 : verdict === "close" ? 2 : 1 };
 }
 // Answers that are checked by key terms instead of exact wording.
 const usesKeywords = ans => hasMarks(ans) || !typeable(plain(ans));
 // Shows the correct answer with found terms in green and missing ones in red.
 function highlightAnswer(text, res) {
-  const hit = new Set(res.found.flatMap(k => k.words)), miss = new Set(res.missing.flatMap(k => k.words));
+  const hit = new Set(res.found.flatMap(k => k.alts.flat()));
+  const miss = new Set(res.missing.flatMap(k => k.alts.flat()).filter(w => !hit.has(w)));
   return plain(text).split(/([\p{L}\p{N}][\p{L}\p{N}-]*)/u).map((part, i) => {
     if (i % 2 === 0) return esc(part);
     const n = kn(part);
     return hit.has(n) ? `<mark class="hit">${esc(part)}</mark>` : miss.has(n) ? `<mark class="miss">${esc(part)}</mark>` : esc(part);
   }).join("");
 }
-const richText = t => esc(t).replace(/\*([^*\n]+)\*/g, '<mark class="kw">$1</mark>');
+const richText = t => esc(t).replace(/\*{1,2}([^*\n]+?)\*{1,2}/g, '<mark class="kw">$1</mark>');
 
 // Wrong options that look like real answers: other cards' answers of similar length.
 function distractors(deck, u) {
