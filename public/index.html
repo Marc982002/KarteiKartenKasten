@@ -381,6 +381,28 @@ input[type=text].ol-input:focus{border-bottom:2px solid var(--accent)}
   .ol-btns{grid-area:btn}
 }
 
+/* Progress in stages */
+.stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:460px}
+.stage{display:flex;flex-direction:column;gap:3px;min-width:0}
+.stage-top{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.stage-top b{font-family:var(--font-display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.stage-top span{font-size:13px;color:var(--muted)}
+.stage-bar{height:7px;border:1.5px solid var(--sketch);border-radius:var(--wobble)}
+.stage-bar i{display:block;height:100%;background:var(--accent)}
+.stage:nth-child(2) .stage-bar i{background:var(--good)}
+.stage:nth-child(3) .stage-bar i{background:var(--gold)}
+.day-sum{flex:1 1 100%;margin:0;font-size:14.5px;color:var(--muted);border-top:1.5px dashed var(--line);padding-top:10px}
+.day-sum b{color:var(--ink);font-family:var(--font-hand);font-size:17px}
+
+/* Stamp after each card */
+.stamp{--c:var(--accent);align-self:flex-start;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:4px 14px;border:2.5px solid var(--c);border-radius:var(--wobble);color:var(--c);transform:rotate(-2deg);animation:stamp-in .35s ease-out}
+.stamp b{font-family:var(--font-display);font-size:24px;line-height:1.1}
+.stamp span{font-size:14px;color:var(--ink)}
+.stamp.up{--c:var(--good)} .stamp.again{--c:var(--again)} .stamp.learn{--c:var(--hard)}
+@keyframes stamp-in{from{transform:scale(1.5) rotate(-8deg);opacity:0}60%{transform:scale(.95) rotate(-1deg);opacity:1}to{transform:scale(1) rotate(-2deg)}}
+@media (prefers-reduced-motion:reduce){.stamp{animation:none}}
+@media (max-width:600px){.stages{gap:8px}.stage-top b{font-size:22px}}
+
 /* Badges are ink stamps */
 .badge .disc{font-family:var(--font-hand);font-size:15px;border:2px dashed var(--line)}
 .badge.on .disc{border:3px double var(--b);background:transparent;transform:rotate(-9deg)}
@@ -693,7 +715,7 @@ const state = {
   draft: null,         // import draft
   session: null, save: "saved",
   pasteOpen: false,
-  profile: { goal: 20, days: {}, badges: {} }, // answers per day (goal + streak), earned badges with date
+  profile: { goal: 20, days: {}, badges: {}, daily: {} }, // answers per day (goal + streak), earned badges, per-day learned/moved-up counts
   flags: { comeback: false, cleared: false },   // one-off events of this visit that badges look at
   log: { day: "", entries: [] },   // today's answer history: [cardId, dir, grade, time, deckId]
   topics: [],                      // [{ id, name, created }]; a deck links to one via deck.topic
@@ -722,10 +744,9 @@ function saveTopics() {
 // Fach distribution across several decks (a topic), same shape as deckProgress().
 function progressOf(decks) {
   const counts = [0, 0, 0, 0, 0, 0];
-  for (const d of decks) deckProgress(d).counts.forEach((n, i) => counts[i] += n);
-  const units = counts.reduce((a, n) => a + n, 0);
-  const pct = units ? Math.round(counts.reduce((a, n, f) => a + n * f, 0) / (5 * units) * 100) : 0;
-  return { counts, units, pct, tier: TIERS.find(t => pct >= t.min) || null };
+  let learned = 0;
+  for (const d of decks) { const p = deckProgress(d); p.counts.forEach((n, i) => counts[i] += n); learned += p.learned; }
+  return progressFrom(counts, learned);
 }
 
 /* ---------- Topic tree: an outline of the subject, cards matched to its branches ---------- */
@@ -980,7 +1001,7 @@ function buildQueue(deck) {
 function markProfile() {
   const days = state.profile.days, keys = Object.keys(days).sort();
   for (const k of keys.slice(0, Math.max(0, keys.length - 400))) delete days[k];
-  queueWrite("p:profile", () => state.store.putDoc("profile", { kind: "profile", goal: state.profile.goal, days: { ...state.profile.days }, badges: { ...state.profile.badges } }));
+  queueWrite("p:profile", () => state.store.putDoc("profile", { kind: "profile", goal: state.profile.goal, days: { ...state.profile.days }, badges: { ...state.profile.badges }, daily: { ...state.profile.daily } }));
 }
 function markLog() {
   const log = state.log;
@@ -1024,12 +1045,17 @@ function fachOf(st) {
   return st.s < 7 ? 2 : st.s < 21 ? 3 : st.s < 90 ? 4 : 5;
 }
 const TIERS = [{ min: 75, name: "Gold", color: "--gold" }, { min: 50, name: "Silber", color: "--silver" }, { min: 25, name: "Bronze", color: "--bronze" }];
+// Stages a card goes through: started (seen once), learned (out of the short learning steps), solid (sits 3+ weeks).
 function deckProgress(deck) {
   const counts = [0, 0, 0, 0, 0, 0];
-  for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) counts[fachOf(c["s" + dir])]++;
+  let learned = 0;
+  for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; counts[fachOf(st)]++; if (st && st.q === 2) learned++; }
+  return progressFrom(counts, learned);
+}
+function progressFrom(counts, learned) {
   const units = counts.reduce((a, n) => a + n, 0);
   const pct = units ? Math.round(counts.reduce((a, n, f) => a + n * f, 0) / (5 * units) * 100) : 0;
-  return { counts, units, pct, tier: TIERS.find(t => pct >= t.min) || null };
+  return { counts, units, pct, tier: TIERS.find(t => pct >= t.min) || null, started: units - counts[0], learned, solid: counts[4] + counts[5] };
 }
 const BADGES = [
   { id: "first", mark: "1", name: "Erster Schritt", hint: "Beantworte deine erste Karte." },
@@ -1322,7 +1348,7 @@ function rate(g) {
   const s = state.session; if (!s || !s.current || !s.revealed) return;
   const u = s.current, deck = u.deck, key = "s" + u.dir, k = ukey(u);
   const prev = u.card[key], now = Date.now();
-  s.history.push({ unit: u, prev: prev ? { ...prev } : null, main: [...s.main], learn: [...s.learn], done: s.done, newCount: deck.newCount, revCount: deck.revCount, wasFirst: !s.first.has(k), lastKey: s.lastKey, lastMove: s.lastMove });
+  s.history.push({ unit: u, prev: prev ? { ...prev } : null, main: [...s.main], learn: [...s.learn], done: s.done, newCount: deck.newCount, revCount: deck.revCount, wasFirst: !s.first.has(k), lastKey: s.lastKey, lastMove: s.lastMove, stamp: s.stamp, daily: { ...(state.profile.daily[dayKey()] || {}) } });
   if (s.history.length > 50) s.history.shift();
   const next = previewFor(s).o[g - 1];
   u.card[key] = next;
@@ -1334,6 +1360,12 @@ function rate(g) {
   const from = fachOf(prev), to = fachOf(next);
   if (!s.startFach.has(k)) s.startFach.set(k, { u, from });
   s.lastMove = { from, to };
+  s.stamp = stampFor(prev, next, from, to, now);
+  // Today's summary on the overview.
+  const today = dayKey(), dl = state.profile.daily[today] = { learned: 0, up: 0, ...(state.profile.daily[today] || {}) };
+  if (next.q === 2 && (!prev || prev.q !== 2)) dl.learned++;
+  if (prev && to > from) dl.up++;
+  const keys = Object.keys(state.profile.daily).sort(); for (const old of keys.slice(0, Math.max(0, keys.length - 120))) delete state.profile.daily[old];
   s.done++; s.lastKey = k;
   s.badges.push(...checkBadges());
   markChunk(deck, u.card.c); markMeta(deck);
@@ -1343,13 +1375,24 @@ function undo() {
   const s = state.session; if (!s || !s.history.length) return;
   const h = s.history.pop(), deck = h.unit.deck;
   h.unit.card["s" + h.unit.dir] = h.prev;
-  s.main = h.main; s.learn = h.learn; s.done = h.done; s.lastKey = h.lastKey; s.lastMove = h.lastMove;
+  s.main = h.main; s.learn = h.learn; s.done = h.done; s.lastKey = h.lastKey; s.lastMove = h.lastMove; s.stamp = null;
+  state.profile.daily[dayKey()] = h.daily; markProfile();
   deck.newCount = h.newCount; deck.revCount = h.revCount;
   if (h.wasFirst) { s.first.delete(ukey(h.unit)); s.startFach.delete(ukey(h.unit)); }
   unrecordAnswer();
   s.current = h.unit; s.revealed = true; s.finished = false; s.mode = "flip"; s.options = null; s.answer = null; s.preview = null;
   markChunk(deck, h.unit.card.c); markMeta(deck);
   render();
+}
+// What the last rating did to the card, in words: shown as a stamp above the next card.
+function stampFor(prev, next, from, to, now) {
+  const when = fmtDur(next.due - now);
+  const day = new Date(next.due).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+  if (prev && prev.q === 2 && next.q === 3) return { kind: "again", title: "Vergessen", text: `kommt in ${when} nochmal` };
+  if (next.q !== 2) return { kind: "learn", title: !prev ? "Kennengelernt" : "Noch üben", text: `nochmal in ${when}${!prev ? ", danach gilt sie als gelernt" : ""}` };
+  if (!prev || prev.q !== 2) return { kind: "up", title: "Gelernt ✓", text: `wieder in ${when} (${day})` };
+  if (to > from) return { kind: "up", title: `${FAECHER[to].name} ↑`, text: `sitzt jetzt etwa ${fmtDur(next.s * DAY)}, wieder am ${day}` };
+  return { kind: "ok", title: "Sitzt", text: `wieder in ${when} (${day})` };
 }
 function exitStudy() { flush(); state.session = null; state.view = "home"; render(); }
 
@@ -1569,6 +1612,11 @@ function todayHTML() {
       <span>${n === 0 ? "Erreiche heute dein Ziel, um eine Serie zu starten." : todayOk ? "Serie, heute geschafft." : "Serie. Heute noch " + (goal - today) + " Antworten, dann hält sie."}</span>
     </div>
     <div class="week" aria-label="Tagesziel der letzten 7 Tage">${week}</div>
+    ${(() => {
+      const dl = state.profile.daily[dayKey()] || {}, startedToday = state.decks.reduce((a, d) => a + (d.newDay === dayKey() ? Math.max(0, d.newCount || 0) : 0), 0);
+      const parts = [startedToday && `<b>${startedToday}</b> neue Karten angefangen`, dl.learned && `<b>${dl.learned}</b> gelernt`, dl.up && `<b>${dl.up}</b> eine Stufe weiter`].filter(Boolean);
+      return today ? `<p class="day-sum">Heute: ${parts.length ? parts.join(" · ") : `${today} Antworten`}.</p>` : "";
+    })()}
   </section>`;
 }
 
@@ -1829,13 +1877,17 @@ function deckHTML(deck) {
 function masteryHTML(deck) { return masteryBar(deckProgress(deck)); }
 function masteryBar(p) {
   if (!p.units) return "";
-  const solid = p.counts[4] + p.counts[5];
   const next = [...TIERS].reverse().find(t => p.pct < t.min);
+  const stage = (n, name, hint) => `<div class="stage" title="${hint}"><div class="stage-top"><b>${n}</b><span>${name}</span></div><div class="stage-bar"><i style="width:${p.units ? n / p.units * 100 : 0}%"></i></div></div>`;
   return `<div class="mastery">
-    <div class="segbar" role="img" aria-label="${FAECHER.map((f, i) => f.name + ": " + p.counts[i]).join(", ")}">${p.counts.map((n, i) => n ? `<i class="f${i}" style="width:${n / p.units * 100}%"></i>` : "").join("")}</div>
+    <div class="stages">
+      ${stage(p.started, "angefangen", "Mindestens einmal gelernt")}
+      ${stage(p.learned, "gelernt", "Kurze Lernrunden geschafft, kommt erst in ein paar Tagen wieder")}
+      ${stage(p.solid, "gefestigt", "Sitzt mindestens 3 Wochen")}
+    </div>
     <div class="mastery-line">
       ${p.tier ? `<span class="tier" style="--t:var(${p.tier.color})">${p.tier.name}</span>` : ""}
-      <span>${p.pct} % Fortschritt · ${solid} gefestigt${next ? ` · ${next.name} ab ${next.min} %` : ""}</span>
+      <span>von ${p.units} Karten · ${p.pct} % Fortschritt${next ? ` · ${next.name} ab ${next.min} %` : ""}</span>
     </div>
   </div>`;
 }
@@ -2031,6 +2083,7 @@ function studyHTML() {
       </div>
     </div>
     <div class="progress" aria-hidden="true"><i style="width:${(prog * 100).toFixed(1)}%"></i></div>
+    ${s.stamp && !s.revealed ? `<div class="stamp ${s.stamp.kind}" role="status"><b>${esc(s.stamp.title)}</b><span>Letzte Karte: ${esc(s.stamp.text)}</span></div>` : ""}
     <article class="card ${flipTap ? "tap" : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
       <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span><span>${esc(info)}</span></div>
       <div class="face front ${sizeF}"><span>${richText(front)}</span></div>
@@ -2039,7 +2092,7 @@ function studyHTML() {
     ${feedback}
     ${actions}
     <div class="study-foot">
-      <span>${s.lastMove && !s.revealed ? `<span class="move-note">Letzte Karte: ${FAECHER[s.lastMove.from].name} → ${FAECHER[s.lastMove.to].name}. </span>` : ""}${hint}</span>
+      <span>${hint}</span>
       <button class="linkish" data-act="undo" ${s.history.length ? "" : "disabled"}>Letzte Bewertung rückgängig (Z)</button>
     </div>
   </div>`;
@@ -2326,7 +2379,7 @@ async function loadAll() {
   state.topics = Array.isArray(topics?.list) ? topics.list : [];
   // Trees pasted before the editor existed were stored as text: turn them into an outline with ids.
   for (const t of state.topics) if (!t.outline && t.tree) { t.outline = outlineFromText(t.tree); delete t.tree; }
-  state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) }, badges: { ...(profile?.badges || {}) } };
+  state.profile = { goal: profile?.goal || 20, days: { ...(profile?.days || {}) }, badges: { ...(profile?.badges || {}) }, daily: { ...(profile?.daily || {}) } };
   state.log = { day: today, entries: Array.isArray(log?.entries) ? log.entries : [] };
   // Before history existed: count today's answers from the decks.
   if (state.profile.days[today] == null) {
