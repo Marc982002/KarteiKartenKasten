@@ -107,6 +107,14 @@ Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.d
 - `node_modules/ts-fsrs`: der Lernalgorithmus, wird vom Server unter `/vendor/ts-fsrs.js` ausgeliefert. Fehlt er, nutzt die App eine eingebaute FSRS-5-Version.
 - `artifact/karteikasten.html`: die frühere Version als Claude-Artefakt. Sie speichert im Claude-Konto statt lokal und wird vom Server nicht genutzt.
 
+## Tests
+
+```bash
+npm test
+```
+
+Die Tests laden den echten App-Code aus `public/index.html` und prüfen die heiklen Teile: Antwortprüfung (Tippfehler, Schlüsselbegriffe, Schwellen), Zeitplanung (mit ts-fsrs und mit der eingebauten Ersatzversion), die Auswahl der Karten für heute, Problemkarten, Aussetzen und CSV-Export. Dazu kommt der Server in einem Wegwerf-Ordner: Speichern, automatische Sicherung, Wiederherstellen und der Schutz vor fremden Websites. Deine echten Daten werden dabei nicht angefasst. Vor jedem Merge `npm test` laufen lassen.
+
 ## Lizenz
 
 MIT, siehe [LICENSE](LICENSE).
