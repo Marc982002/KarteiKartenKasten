@@ -62,7 +62,9 @@ Ein Thema legst du über **„Neues Thema“** an. Die Zuordnung änderst du unt
 ## Fortschritt und Abzeichen
 
 - **Karteikasten mit Fächern** (Statistik eines Stapels): Jede Karte liegt in einem von fünf Fächern, je nachdem, wie lange sie laut Algorithmus sicher sitzt (unter 1 Tag bis über 3 Monate). Gewusste Karten rücken weiter, vergessene fallen zurück.
-- **Fortschritt pro Stapel** mit den Stufen Bronze (25 %), Silber (50 %) und Gold (75 %).
+- **Fortschritt pro Stapel** in drei Stufen: *angefangen* (mindestens einmal gelernt), *gelernt* (kurze Lernrunden geschafft, kommt erst nach Tagen wieder) und *gefestigt* (sitzt mindestens 3 Wochen). Dazu die Medaillen Bronze (25 %), Silber (50 %) und Gold (75 %).
+- **Stempel nach jeder Karte:** Über der nächsten Karte steht, was die letzte Bewertung bewirkt hat, z. B. „Gelernt ✓ – wieder in 1 Tag“ oder „Fach 3 ↑ – sitzt jetzt etwa 2 Wochen“.
+- **Tagesbilanz** auf der Übersicht: neue Karten angefangen, gelernt und eine Stufe weiter.
 - **16 Abzeichen** für Regelmäßigkeit und Meilensteine, z. B. Serien, Antworten insgesamt, „Alles erledigt“ oder die erste Karte in Fach 5.
 
 Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges Behalten. Es gibt keine Punkte für „richtige“ Bewertungen, weil das dazu verleiten würde, Karten besser zu bewerten, als sie liefen. Der Algorithmus würde dann zu lange Abstände planen.
