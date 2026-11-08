@@ -65,6 +65,9 @@ Ein Thema legst du über **„Neues Thema“** an. Die Zuordnung änderst du unt
 - **Fortschritt pro Stapel** in drei Stufen: *angefangen* (mindestens einmal gelernt), *gelernt* (kurze Lernrunden geschafft, kommt erst nach Tagen wieder) und *gefestigt* (sitzt mindestens 3 Wochen). Dazu die Medaillen Bronze (25 %), Silber (50 %) und Gold (75 %).
 - **Stempel nach jeder Karte:** Über der nächsten Karte steht, was die letzte Bewertung bewirkt hat, z. B. „Gelernt ✓ – wieder in 1 Tag“ oder „Fach 3 ↑ – sitzt jetzt etwa 2 Wochen“.
 - **Tagesbilanz** auf der Übersicht: neue Karten angefangen, gelernt und eine Stufe weiter.
+- **Deine Entwicklung:** Beim Aufdecken zeigt die App deine bisherigen Bewertungen zu dieser Karte, den Vergleich mit der letzten Antwort („Letztes Mal 3 von 7 Begriffen, heute 6 von 7“) und aufklappbar deine letzte Antwort.
+
+Pro Antwort speichert die App im Verlauf (`log-<Datum>`): Karte, Richtung, Bewertung, Zeitpunkt, Set und zusätzlich den getippten Text, gefundene und fehlende Begriffe, den Vorschlag der App, die Abfrageart und die Antwortdauer. Das ist die Grundlage für spätere Verbesserungen wie gelernte Synonyme oder persönliche Schwellen.
 - **16 Abzeichen** für Regelmäßigkeit und Meilensteine, z. B. Serien, Antworten insgesamt, „Alles erledigt“ oder die erste Karte in Fach 5.
 
 Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges Behalten. Es gibt keine Punkte für „richtige“ Bewertungen, weil das dazu verleiten würde, Karten besser zu bewerten, als sie liefen. Der Algorithmus würde dann zu lange Abstände planen.
