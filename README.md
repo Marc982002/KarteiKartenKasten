@@ -74,7 +74,14 @@ Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges B
 
 ## Wo die Daten liegen
 
-Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.db` (SQLite). Zum Sichern den ganzen Ordner `data/` kopieren, am besten bei beendetem Server.
+Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.db` (SQLite).
+
+## Sichern und wiederherstellen
+
+- **Automatisch:** Beim Start und danach stündlich prüft der Server, ob es für heute schon eine Sicherung gibt. Wenn nicht, legt er `data/backups/karteikasten-<Datum>.json` an. Die letzten 14 Tage bleiben erhalten.
+- **Herunterladen:** Auf der Übersicht unter „Daten sichern“ lädt „Sicherung herunterladen“ eine Datei mit allen Stapeln, dem Lernstand, den Themen und dem Verlauf. Weil die automatischen Kopien auf demselben Computer liegen, solltest du ab und zu eine Sicherung herunterladen und woanders ablegen. Die App zeigt an, wann du das zuletzt getan hast, und hebt es nach 30 Tagen hervor.
+- **Wiederherstellen:** „Aus Sicherung wiederherstellen“ nimmt eine heruntergeladene oder automatische Sicherung. Vorher zeigt die App, was darin steckt, und fragt nach. Der jetzige Stand wird zuerst als `data/backups/vor-wiederherstellung-<Zeit>.json` abgelegt. Ein Fehlgriff lässt sich also rückgängig machen, indem du diese Datei wiederherstellst. Die letzten 5 dieser Dateien bleiben erhalten.
+- **CSV-Export:** In den Einstellungen eines Stapels speichert „Als CSV exportieren“ die Karten als Vorderseite;Rückseite. Die Datei lässt sich wieder importieren oder in Excel öffnen. Der Lernstand steckt darin nicht, dafür ist die Sicherung da.
 
 ## Optionen
 
@@ -83,10 +90,11 @@ Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.d
 | `PORT` | `4321` | Anderer Port, falls 4321 belegt ist: `PORT=4322 npm start` |
 | `HOST` | `127.0.0.1` | `HOST=0.0.0.0 npm start` macht die App im WLAN erreichbar, z. B. vom Handy. Es gibt kein Passwort, also nur in einem vertrauenswürdigen Netz nutzen. |
 | `DATA_DIR` | `./data` | Anderer Speicherort für die Datenbank. Nicht in iCloud-Ordner legen. |
+| `BACKUP_DIR` | `./data/backups` | Anderer Ordner für die automatischen Sicherungen, z. B. auf einem externen Laufwerk. Die Sicherungen sind einzelne Dateien und dürfen auch in einem Cloud-Ordner liegen. |
 
 ## Aufbau
 
-- `server.js`: liefert die App aus und speichert JSON-Dokumente in SQLite (`/api/docs`). Ohne Framework, nur Node-Bordmittel.
+- `server.js`: liefert die App aus, speichert JSON-Dokumente in SQLite (`/api/docs`) und erstellt Sicherungen (`/api/backup`, `/api/restore`). Ohne Framework, nur Node-Bordmittel.
 - `public/index.html`: die komplette App (Import, Lernen, Statistik, Einstellungen).
 - `node_modules/ts-fsrs`: der Lernalgorithmus, wird vom Server unter `/vendor/ts-fsrs.js` ausgeliefert. Fehlt er, nutzt die App eine eingebaute FSRS-5-Version.
 - `artifact/karteikasten.html`: die frühere Version als Claude-Artefakt. Sie speichert im Claude-Konto statt lokal und wird vom Server nicht genutzt.

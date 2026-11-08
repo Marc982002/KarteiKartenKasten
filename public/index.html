@@ -112,6 +112,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 label.check{display:flex;gap:10px;align-items:center;font-size:15px}
 label.check input{width:18px;height:18px;accent-color:var(--accent)}
 .row-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.restore-confirm{border:2px solid var(--again);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.restore-confirm p{margin:0}
+.warn-text{color:var(--hard);font-weight:700}
+.panel code{font-size:13px;word-break:break-all}
 .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
 table{border-collapse:collapse;width:100%;font-size:14px}
 th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top;max-width:280px;overflow-wrap:anywhere}
@@ -744,7 +748,9 @@ const state = {
   topicEdit: null,                 // { id | null, name, deckIds: Set, confirmDelete } while the topic panel is open
   lastTopic: "",
   treeOpen: null,                  // topic id whose tree panel is open
-  treeExpanded: new Set()          // open card lists in the tree view (branch ids, "rest", "unsure")
+  treeExpanded: new Set(),         // open card lists in the tree view (branch ids, "rest", "unsure")
+  backup: null,                    // status from the server: backup folder, last automatic backup, last download
+  restore: null                    // { name, created, docs, decks, cards, busy } while a restore waits for confirmation
 };
 const deckById = id => state.decks.find(d => d.id === id);
 const dirsOf = deck => deck.dir === "b" ? ["f", "r"] : [deck.dir === "r" ? "r" : "f"];
@@ -1625,7 +1631,7 @@ function homeHTML() {
   </header>`;
   if (state.loading) return head + `<p class="loading">Lade deine Stapel …</p>`;
   if (state.loadError) return head + `<div class="panel"><p class="error">${esc(state.loadError)}</p></div>`;
-  return head + todayHTML() + (state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML()) + decksHTML() + badgesHTML() + howHTML();
+  return head + todayHTML() + (state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML()) + decksHTML() + badgesHTML() + backupHTML() + howHTML();
 }
 
 function dropHTML() {
@@ -2049,11 +2055,105 @@ function settingsHTML(deck) {
     <div class="row-actions">
       <label class="btn ghost" for="file-add-${deck.id}">CSV-Datei ergänzen</label>
       <input class="sr" type="file" id="file-add-${deck.id}" data-id="${deck.id}" accept=".csv,.tsv,.txt,text/csv,text/plain">
+      <button class="btn ghost" data-act="csv" data-id="${deck.id}">Als CSV exportieren</button>
       ${confirming
         ? `<span class="small">${deck.cardCount} Karten und Lernstand endgültig löschen?</span><button class="btn danger solid sm" data-act="del-yes" data-id="${deck.id}">Endgültig löschen</button><button class="btn ghost sm" data-act="del-no">Behalten</button>`
         : `<button class="btn danger" data-act="del" data-id="${deck.id}">Stapel löschen</button>`}
     </div>
   </div>`;
+}
+
+/* ---------- Backup: download everything, restore from a file ---------- */
+function daysAgo(t) {
+  const n = Math.round((new Date(dayKey()) - new Date(dayKey(t))) / DAY);
+  return n <= 0 ? "heute" : n === 1 ? "gestern" : "vor " + n + " Tagen";
+}
+function backupHTML() {
+  if (state.store?.kind !== "server" || !state.decks.length && !state.restore) return "";
+  const b = state.backup, r = state.restore;
+  const time = t => new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const auto = !b ? "" : b.lastAuto
+    ? `Automatisch gesichert ${daysAgo(b.lastAuto)}${daysAgo(b.lastAuto) === "heute" ? " um " + time(b.lastAuto) : ""}. Die App hebt jeden Tag eine Kopie auf, die letzten ${b.keep} Tage. Ordner: <code>${esc(b.dir)}</code>`
+    : `Die erste automatische Sicherung entsteht beim nächsten Start des Servers. Ordner: <code>${esc(b.dir)}</code>`;
+  const stale = b && (!b.lastDownload || Date.now() - b.lastDownload > 30 * DAY);
+  const dl = !b ? "" : b.lastDownload ? `Zuletzt heruntergeladen: ${daysAgo(b.lastDownload)}.` : "Noch nie heruntergeladen.";
+  const confirm = r ? `
+    <div class="restore-confirm" role="alert">
+      <p><b>Sicherung vom ${esc(new Date(r.created).toLocaleString("de-DE", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }))}</b><br>
+      <span class="small">${r.decks} Stapel mit ${r.cards} Karten, dazu Lernstand, Themen und Verlauf.</span></p>
+      <p class="small">Das ersetzt alles, was jetzt in der App ist. Der jetzige Stand wird vorher im Sicherungsordner abgelegt, du kannst also zurück.</p>
+      <div class="row-actions">
+        <button class="btn danger solid sm" data-act="restore-yes" ${r.busy ? "disabled" : ""}>${r.busy ? "Stelle wieder her …" : "Wiederherstellen"}</button>
+        <button class="btn ghost sm" data-act="restore-no" ${r.busy ? "disabled" : ""}>Abbrechen</button>
+      </div>
+    </div>` : "";
+  return `
+  <section aria-labelledby="backup-h">
+    <div class="sec-head"><h2 id="backup-h">Daten sichern</h2></div>
+    <div class="panel">
+      <p class="small" style="margin:0">${auto}</p>
+      <p class="small" style="margin:0">Diese Kopien liegen auf demselben Computer. Lade ab und zu eine Sicherung herunter und lege sie woanders ab, z. B. auf einem USB-Stick oder in einem Cloud-Ordner. Sie enthält alle Stapel, deinen Lernstand und den Verlauf.</p>
+      <div class="row-actions">
+        <button class="btn primary" data-act="backup-dl">Sicherung herunterladen</button>
+        <label class="btn ghost" for="file-restore">Aus Sicherung wiederherstellen</label>
+        <input class="sr" type="file" id="file-restore" accept=".json,application/json">
+        ${dl ? `<span class="small ${stale ? "warn-text" : "muted"}">${dl}</span>` : ""}
+      </div>
+      ${confirm}
+    </div>
+  </section>`;
+}
+async function loadBackupStatus() {
+  if (state.store?.kind !== "server") return;
+  try { const r = await fetch("/api/backup/status"); if (r.ok) state.backup = await r.json(); } catch {}
+}
+async function downloadBackup() {
+  await flush();
+  if (WQ.pending.size || state.save === "error") { toast("Erst muss alles gespeichert sein. Versuch es gleich noch einmal."); return; }
+  const a = document.createElement("a");
+  a.href = "/api/backup"; a.download = ""; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(async () => { await loadBackupStatus(); render(); }, 800);
+}
+async function openRestore(file) {
+  if (!file) return;
+  let b;
+  try { b = JSON.parse(await readFileText(file)); } catch { toast("Die Datei ist keine gültige Sicherung."); return; }
+  if (!b || b.app !== "karteikasten" || !Array.isArray(b.docs) || !b.docs.length) { toast("Die Datei ist keine Karteikasten-Sicherung."); return; }
+  const data = b.docs.map(d => d?.data || {});
+  state.restore = { docs: b.docs, created: b.created || file.lastModified, decks: data.filter(d => d.kind === "deck").length,
+    cards: data.filter(d => d.kind === "chunk").reduce((a, d) => a + (Array.isArray(d.cards) ? d.cards.length : 0), 0), busy: false };
+  render();
+  $("#backup-h")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+async function doRestore() {
+  const r = state.restore; if (!r || r.busy) return;
+  r.busy = true; render();
+  // Unsaved changes of this tab would land on top of the restored data, so drop them.
+  clearTimeout(WQ.timer); WQ.pending.clear();
+  try {
+    const res = await fetch("/api/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app: "karteikasten", format: 1, created: r.created, docs: r.docs }) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(out.error || "Wiederherstellen fehlgeschlagen.");
+  } catch (e) {
+    r.busy = false; render();
+    toast(e.message === "Failed to fetch" ? "Der Server antwortet nicht." : e.message); return;
+  }
+  state.restore = null;
+  toast("Sicherung wiederhergestellt. Lade neu …");
+  setTimeout(() => location.reload(), 700);
+}
+
+/* ---------- CSV export of one deck ---------- */
+function exportCSV(deck) {
+  const cell = v => /[";\n\r]/.test(v) || /^\s|\s$/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const rows = [["Vorderseite", "Rückseite"], ...(state.cards[deck.id] || []).map(c => [c.f, c.b])];
+  const text = "\uFEFF" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = (deck.name.replace(/[\\/:*?"<>|]+/g, " ").trim() || "Stapel") + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast((state.cards[deck.id] || []).length + " Karten als CSV exportiert. Der Lernstand ist darin nicht enthalten.");
 }
 
 function howHTML() {
@@ -2335,6 +2435,10 @@ document.addEventListener("click", e => {
     state.decks = state.decks.filter(d => d.id !== id); delete state.cards[id];
     state.confirmDelete = null; state.open = null; toast("Stapel gelöscht."); render();
   }
+  else if (act === "backup-dl") downloadBackup();
+  else if (act === "restore-yes") doRestore();
+  else if (act === "restore-no") { state.restore = null; render(); }
+  else if (act === "csv") { const deck = deckById(id); if (deck) exportCSV(deck); }
   else if (act === "more-new") {
     const s = state.session; if (!s) return;
     const decks = s.deckIds.map(deckById).filter(Boolean);
@@ -2346,6 +2450,7 @@ document.addEventListener("change", e => {
   const t = e.target, d = state.draft;
   if (t.id === "file-new") { openImport(t.files[0]); t.value = ""; }
   else if (t.id?.startsWith("file-add-")) { openImport(t.files[0], t.dataset.id); t.value = ""; }
+  else if (t.id === "file-restore") { openRestore(t.files[0]); t.value = ""; }
   else if (t.id === "imp-f" && d) { d.fc = +t.value; render(); }
   else if (t.id === "imp-b" && d) { d.bc = +t.value; render(); }
   else if (t.id === "imp-head" && d) { d.header = t.checked; render(); }
@@ -2435,7 +2540,7 @@ async function boot() {
       ? "Der Karteikasten-Server antwortet nicht. Prüfe im Terminal, ob er noch läuft (npm start), und lade die Seite neu."
       : "Deine Stapel konnten nicht geladen werden.";
   }
-  if (!state.loadError) checkBadges({ silent: true });
+  if (!state.loadError) { checkBadges({ silent: true }); await loadBackupStatus(); }
   state.loading = false; render();
 }
 async function loadAll() {
