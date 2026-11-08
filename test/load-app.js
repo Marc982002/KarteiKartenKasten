@@ -17,10 +17,11 @@ function fakeElement() {
 }
 
 /**
- * @param {{ tsFsrs?: boolean }} opts  tsFsrs: false loads the app without the ts-fsrs library (built-in fallback).
+ * @param {{ tsFsrs?: boolean, server?: string }} opts  tsFsrs: false loads the app without the ts-fsrs library
+ *   (built-in fallback). server: base URL of a running test server; without it the app keeps data in memory.
  * @returns {Promise<{ run: (code: string) => any, get: (code: string) => any, warnings: string[], downloads: { name: string, blob: Blob }[] }>}
  */
-export async function loadApp({ tsFsrs = true } = {}) {
+export async function loadApp({ tsFsrs = true, server = null } = {}) {
   const elements = { "#app": fakeElement(), "#toast": fakeElement() };
   const warnings = [], downloads = [];
   const later = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
@@ -33,7 +34,7 @@ export async function loadApp({ tsFsrs = true } = {}) {
     },
     addEventListener: noop,
     location: { reload: noop },
-    fetch: () => Promise.reject(new Error("kein Server im Test")), // the app falls back to in-memory storage
+    fetch: server ? (url, opts) => fetch(new URL(url, server), opts) : () => Promise.reject(new Error("kein Server im Test")), // without a server the app falls back to in-memory storage
     setTimeout: later, clearTimeout, setInterval: later, clearInterval,
     TextEncoder, Blob,
     URL: Object.assign(function (...a) { return new URL(...a); }, { createObjectURL: b => { const k = "blob:" + blobs.size; blobs.set(k, b); return k; }, revokeObjectURL: noop })

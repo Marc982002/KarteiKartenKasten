@@ -31,19 +31,48 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS docs_kind ON docs(kind);
   CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+  -- Deleted documents, so other devices learn about the deletion.
+  CREATE TABLE IF NOT EXISTS deleted (id TEXT PRIMARY KEY, rev INTEGER NOT NULL);
 `);
+// Every write gets a revision number from one counter. A device sends the revision it last saw;
+// if someone else wrote in between, the write is refused and the device merges first.
+if (!db.prepare("PRAGMA table_info(docs)").all().some(c => c.name === "rev")) db.exec("ALTER TABLE docs ADD COLUMN rev INTEGER NOT NULL DEFAULT 0");
+db.exec("CREATE INDEX IF NOT EXISTS docs_rev ON docs(rev); CREATE INDEX IF NOT EXISTS deleted_rev ON deleted(rev);");
 const sql = {
-  get: db.prepare("SELECT data FROM docs WHERE id = ?"),
+  get: db.prepare("SELECT data, rev FROM docs WHERE id = ?"),
   byKind: db.prepare("SELECT data FROM docs WHERE kind = ? ORDER BY id"),
+  byKindRev: db.prepare("SELECT id, rev, data FROM docs WHERE kind = ? ORDER BY id"),
+  since: db.prepare("SELECT id, rev, data FROM docs WHERE rev > ? ORDER BY id"),
+  deletedSince: db.prepare("SELECT id, rev FROM deleted WHERE rev > ? ORDER BY id"),
+  tomb: db.prepare("SELECT rev FROM deleted WHERE id = ?"),
+  addTomb: db.prepare("INSERT INTO deleted (id, rev) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET rev = excluded.rev"),
+  dropTomb: db.prepare("DELETE FROM deleted WHERE id = ?"),
+  ids: db.prepare("SELECT id FROM docs"),
   all: db.prepare("SELECT id, data FROM docs ORDER BY id"),
   count: db.prepare("SELECT COUNT(*) AS n FROM docs"),
-  put: db.prepare(`INSERT INTO docs (id, kind, data, updated) VALUES (?, ?, ?, ?)
-                   ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, data = excluded.data, updated = excluded.updated`),
+  put: db.prepare(`INSERT INTO docs (id, kind, data, updated, rev) VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, data = excluded.data, updated = excluded.updated, rev = excluded.rev`),
   del: db.prepare("DELETE FROM docs WHERE id = ?"),
   delAll: db.prepare("DELETE FROM docs"),
   getMeta: db.prepare("SELECT value FROM meta WHERE key = ?"),
   setMeta: db.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"),
 };
+const currentRev = () => Number(sql.getMeta.get("rev")?.value || 0);
+function nextRev() { const r = currentRev() + 1; sql.setMeta.run("rev", String(r)); return r; }
+// Revision of a document as a device would know it: the document's, the deletion's, or 0 if it never existed.
+const revOf = id => sql.get.get(id)?.rev ?? sql.tomb.get(id)?.rev ?? 0;
+function putDoc(id, data) {
+  const rev = nextRev();
+  sql.put.run(id, typeof data.kind === "string" ? data.kind : null, JSON.stringify(data), Date.now(), rev);
+  sql.dropTomb.run(id);
+  return rev;
+}
+function deleteDoc(id) {
+  if (!sql.get.get(id)) return revOf(id);
+  const rev = nextRev();
+  sql.del.run(id); sql.addTomb.run(id, rev);
+  return rev;
+}
 
 /* ---------- Backups: every document in one JSON file ----------
    The same format is used for the download button, the daily automatic backup
@@ -101,11 +130,11 @@ function parseBackup(text) {
   return b.docs;
 }
 function replaceAll(docs) {
-  const now = Date.now();
   db.exec("BEGIN");
   try {
-    sql.delAll.run();
-    for (const d of docs) sql.put.run(d.id, typeof d.data.kind === "string" ? d.data.kind : null, JSON.stringify(d.data), now);
+    const keep = new Set(docs.map(d => d.id));
+    for (const { id } of sql.ids.all()) if (!keep.has(id)) deleteDoc(id);
+    for (const d of docs) putDoc(d.id, d.data);
     db.exec("COMMIT");
   } catch (e) { db.exec("ROLLBACK"); throw e; }
 }
@@ -118,8 +147,8 @@ const STATIC = {
 };
 const LOCAL_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-function send(res, status, body = "", type = "application/json; charset=utf-8") {
-  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+function send(res, status, body = "", type = "application/json; charset=utf-8", extra = {}) {
+  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra });
   res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 function httpError(status, message) { return Object.assign(new Error(message), { status }); }
@@ -175,8 +204,18 @@ async function handle(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "Methode nicht erlaubt" });
     const kind = url.searchParams.get("kind");
     if (!kind) return send(res, 400, { error: "Parameter kind fehlt" });
+    if (url.searchParams.get("revs") === "1") return send(res, 200, "[" + sql.byKindRev.all(kind).map(r => `{"id":${JSON.stringify(r.id)},"rev":${r.rev},"data":${r.data}}`).join(",") + "]");
     return send(res, 200, "[" + sql.byKind.all(kind).map(r => r.data).join(",") + "]");
   }
+  // What changed since a revision: other devices poll this to stay current.
+  if (p === "/api/changes") {
+    if (req.method !== "GET") return send(res, 405, { error: "Methode nicht erlaubt" });
+    const since = Number(url.searchParams.get("since"));
+    if (!Number.isInteger(since) || since < 0) return send(res, 400, { error: "Parameter since fehlt" });
+    const docs = sql.since.all(since).map(r => `{"id":${JSON.stringify(r.id)},"rev":${r.rev},"data":${r.data}}`);
+    return send(res, 200, `{"rev":${currentRev()},"docs":[${docs.join(",")}],"deleted":${JSON.stringify(sql.deletedSince.all(since).map(r => ({ id: r.id, rev: r.rev })))}}`);
+  }
+  if (p === "/api/rev") return send(res, 200, { rev: currentRev() });
 
   const m = p.match(/^\/api\/docs\/([^/]+)$/);
   if (m) {
@@ -184,7 +223,7 @@ async function handle(req, res) {
     if (!DOC_ID.test(id)) return send(res, 400, { error: "Ungültige ID" });
     if (req.method === "GET") {
       const row = sql.get.get(id);
-      return send(res, 200, row ? row.data : "null"); // missing documents read as null, like an empty slot
+      return send(res, 200, row ? row.data : "null", undefined, { "X-Rev": String(revOf(id)) }); // missing documents read as null, like an empty slot
     }
     if (req.method === "PUT") {
       // JSON-only writes also mean browsers must ask first for cross-site requests, which this server never allows.
@@ -192,10 +231,17 @@ async function handle(req, res) {
       let data;
       try { data = JSON.parse(await readBody(req)); } catch (e) { if (e.status) throw e; return send(res, 400, { error: "Kein gültiges JSON" }); }
       if (!data || typeof data !== "object" || Array.isArray(data)) return send(res, 400, { error: "Objekt erwartet" });
-      sql.put.run(id, typeof data.kind === "string" ? data.kind : null, JSON.stringify(data), Date.now());
-      return send(res, 204);
+      const expect = req.headers["x-if-rev"];
+      if (expect !== undefined) {
+        const now = revOf(id);
+        if (Number(expect) !== now) {
+          const row = sql.get.get(id);
+          return send(res, 409, `{"error":"Inzwischen auf einem anderen Gerät geändert","rev":${now},"data":${row ? row.data : "null"}}`);
+        }
+      }
+      return send(res, 200, { rev: putDoc(id, data) });
     }
-    if (req.method === "DELETE") { sql.del.run(id); return send(res, 204); }
+    if (req.method === "DELETE") return send(res, 200, { rev: deleteDoc(id) });
     return send(res, 405, { error: "Methode nicht erlaubt" });
   }
 

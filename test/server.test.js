@@ -31,7 +31,7 @@ async function stop() {
 }
 after(async () => { await stop(); await rm(dataDir, { recursive: true, force: true }); });
 
-const put = (id, data) => fetch(`${base}/api/docs/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+const put = (id, data, ifRev) => fetch(`${base}/api/docs/${id}`, { method: "PUT", headers: { "Content-Type": "application/json", ...(ifRev !== undefined ? { "X-If-Rev": String(ifRev) } : {}) }, body: JSON.stringify(data) });
 const restore = (body, type = "application/json") => fetch(`${base}/api/restore`, { method: "POST", headers: { "Content-Type": type }, body: typeof body === "string" ? body : JSON.stringify(body) });
 const backupFiles = async () => (await readdir(path.join(dataDir, "backups")).catch(() => [])).sort();
 // The daily backup is written right after start-up, so give it a moment.
@@ -40,8 +40,8 @@ const today = () => { const d = new Date(), p = n => String(n).padStart(2, "0");
 
 test("Server startet und speichert Dokumente", async () => {
   await start();
-  assert.equal((await put("deck-a", { kind: "deck", name: "A" })).status, 204);
-  assert.equal((await put("deck-a-c0", { kind: "chunk", deck: "a", cards: [{ i: "1", f: "Frage", b: "Antwort" }] })).status, 204);
+  assert.equal((await put("deck-a", { kind: "deck", name: "A" })).status, 200);
+  assert.equal((await put("deck-a-c0", { kind: "chunk", deck: "a", cards: [{ i: "1", f: "Frage", b: "Antwort" }] })).status, 200);
   const decks = await (await fetch(`${base}/api/docs?kind=deck`)).json();
   assert.deepEqual(decks, [{ kind: "deck", name: "A" }]);
 });
@@ -112,4 +112,34 @@ test("Schutz vor fremden Websites", async () => {
     http.get({ host: "127.0.0.1", port, path: "/api/backup", headers: { Host: "evil.example" } }, r => { r.resume(); resolve(r.statusCode); }).on("error", reject);
   });
   assert.equal(status, 403);
+});
+
+test("Versionsnummern: veralteter Stand wird abgelehnt, mit dem aktuellen Stand in der Antwort", async () => {
+  const first = await (await put("profile", { kind: "profile", goal: 20 }, 0)).json();
+  assert.ok(first.rev > 0);
+  const second = await (await put("profile", { kind: "profile", goal: 30 }, first.rev)).json();
+  assert.ok(second.rev > first.rev);
+  // Ein zweites Gerät kennt noch den ersten Stand.
+  const stale = await put("profile", { kind: "profile", goal: 50 }, first.rev);
+  assert.equal(stale.status, 409);
+  const body = await stale.json();
+  assert.equal(body.rev, second.rev);
+  assert.equal(body.data.goal, 30);
+  const r = await fetch(`${base}/api/docs/profile`);
+  assert.equal(r.headers.get("x-rev"), String(second.rev));
+  assert.equal((await r.json()).goal, 30, "nichts überschrieben");
+});
+
+test("Änderungsliste: neue, geänderte und gelöschte Dokumente seit einer Version", async () => {
+  await put("deck-z", { kind: "deck", name: "Z" });
+  const { rev: start } = await (await fetch(`${base}/api/rev`)).json();
+  await put("log-2026-01-01", { kind: "log", day: "2026-01-01", entries: [] });
+  await fetch(`${base}/api/docs/deck-z`, { method: "DELETE" });
+  const ch = await (await fetch(`${base}/api/changes?since=${start}`)).json();
+  assert.deepEqual(ch.docs.map(d => d.id), ["log-2026-01-01"]);
+  assert.deepEqual(ch.deleted.map(d => d.id), ["deck-z"]);
+  assert.ok(ch.rev > start);
+  // Ein Dokument neu anlegen, das ein anderes Gerät gelöscht hat: nur mit der Version der Löschung.
+  assert.equal((await put("deck-z", { kind: "deck" }, 0)).status, 409);
+  assert.equal((await put("deck-z", { kind: "deck" }, ch.deleted[0].rev)).status, 200);
 });
