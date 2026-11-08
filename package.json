@@ -1,0 +1,17 @@
+{
+  "name": "karteikasten",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Karteikarten aus CSV lernen, mit FSRS-Wiederholungsplanung. Läuft lokal.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "ts-fsrs": "5.4.2"
+  }
+}
