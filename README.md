@@ -49,6 +49,14 @@ Steht hinter einem Begriff eine Übersetzung in Klammern, reicht eins von beiden
 
 Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt die App nicht. Die Bewertung ist deshalb immer nur ein Vorschlag.
 
+## Karten bearbeiten
+
+Unter **„Karten“** an jedem Stapel siehst du alle Karten mit ihrem Fach. Du kannst sie durchsuchen, bearbeiten, löschen, einzeln hinzufügen und aussetzen. Beim Bearbeiten bleibt der Lernstand erhalten. Wer die Frage stark umschreibt, kann ihn per Häkchen zurücksetzen.
+
+- **Problemkarten:** Eine Karte, die du 4-mal oder öfter vergessen hast, ist als Problemkarte markiert. Das liegt meist an der Karte selbst, sie ist zu lang oder fragt zu viel auf einmal. Der Filter „Problemkarten“ zeigt sie alle, die häufigste zuerst.
+- **Aussetzen:** Eine ausgesetzte Karte kommt nicht mehr dran und zählt nicht zum Fortschritt, bis du sie wieder aufnimmst. Ihr Lernstand bleibt erhalten.
+- **Beim Lernen:** Nach dem Aufdecken öffnet „Karte bearbeiten“ (Taste `E`) die Karte zum Korrigieren. Bei Problemkarten erscheint ein Hinweis mit „Bearbeiten“ und „Aussetzen“.
+
 ## Themen
 
 Mehrere Kartensets zu einem Fach lassen sich zu einem **Thema** bündeln, z. B. alle Sets einer Vorlesung. Auf der Übersicht steht das Thema mit Summen und Gesamtfortschritt über seinen Sets. **„Thema lernen“** startet eine Runde über alle Sets. Neue Karten kommen abwechselnd aus den Sets, und jedes Set behält sein eigenes Tageslimit und seine Einstellungen.
