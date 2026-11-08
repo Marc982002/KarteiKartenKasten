@@ -53,6 +53,8 @@ Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt d
 
 Mehrere Kartensets zu einem Fach lassen sich zu einem **Thema** bündeln, z. B. alle Sets einer Vorlesung. Auf der Übersicht steht das Thema mit Summen und Gesamtfortschritt über seinen Sets. **„Thema lernen“** startet eine Runde über alle Sets. Neue Karten kommen abwechselnd aus den Sets, und jedes Set behält sein eigenes Tageslimit und seine Einstellungen.
 
+**Themenbaum:** Unter „Bearbeiten“ kannst du einem Thema eine Gliederung geben, als Baum (`├──`, `└──`) oder als eingerückte Liste, eine Zeile pro Zweig. `[cite: …]`-Reste werden ignoriert. Die App ordnet jede Karte automatisch dem Zweig zu, dessen Begriffe sie am stärksten erwähnt. Der Teil vor einem Doppelpunkt („Porter: …“) zählt doppelt, und Begriffe, die in sehr vielen Karten vorkommen, zählen weniger. Unter „Themenbaum“ siehst du pro Zweig Karten, fällige Karten, Fortschritt und Fächer. Der schwächste Zweig ist markiert. Karten, die zu keinem Zweig passen, stehen gesammelt darunter. Oft fehlt dafür ein Zweig im Baum.
+
 Ein Thema legst du über **„Neues Thema“** an. Die Zuordnung änderst du unter „Bearbeiten“ am Thema, in den Einstellungen eines Sets oder schon beim Import. Wird ein Thema gelöscht, bleiben seine Sets erhalten.
 
 ## Fortschritt und Abzeichen
