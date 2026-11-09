@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Karteikarten aus CSV lernen, mit FSRS-Wiederholungsplanung. Läuft lokal.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "scripts": {
     "start": "node server.js",
