@@ -138,4 +138,10 @@ Die Tests laden den echten App-Code aus `public/index.html` und prüfen die heik
 
 ## Lizenz
 
-MIT, siehe [LICENSE](LICENSE).
+[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/), siehe [LICENSE](LICENSE).
+
+Erlaubt ist jede nicht kommerzielle Nutzung: privat, zum Lernen, für Forschung, Hobby und Lehre sowie durch gemeinnützige Organisationen, Bildungseinrichtungen und Behörden. Du darfst den Code ändern und weitergeben, solange die Lizenz und der Urheberrechtsvermerk mitgegeben werden. Kommerzielle Nutzung ist nicht erlaubt. Wer das möchte, kann nach einer eigenen Lizenz fragen.
+
+Versionen bis einschließlich Commit `e2c994d` (8. November 2026) wurden unter der MIT-Lizenz veröffentlicht und bleiben für alle, die sie damals bekommen haben, unter MIT nutzbar.
+
+Die mitgenutzte Bibliothek [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) steht unter ihrer eigenen MIT-Lizenz.
