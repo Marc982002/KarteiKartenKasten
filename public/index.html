@@ -11,6 +11,8 @@
 // Theme and language from the settings, applied before the page draws (no flash of the wrong colours).
 try {
   var th = localStorage.getItem("kk:ui:theme"); if (th === "light" || th === "dark") document.documentElement.dataset.theme = th;
+  var sz = localStorage.getItem("kk:ui:size"); if (sz === "l" || sz === "xl") document.documentElement.dataset.size = sz;
+  var fo = localStorage.getItem("kk:ui:font"); if (fo === "plain") document.documentElement.dataset.font = fo;
   var lg = localStorage.getItem("kk:ui:lang") || (/^de\b/i.test(navigator.language || "") ? "de" : "en"); document.documentElement.lang = lg === "en" ? "en" : "de";
 } catch (e) {}
 </script>
@@ -221,6 +223,8 @@ td.off{color:var(--muted);opacity:.6}
   background-image:linear-gradient(var(--rule-red),var(--rule-red)),repeating-linear-gradient(to bottom,transparent 0 31px,var(--rule-blue) 31px 32px);
   background-size:100% 2px,100% calc(100% - 50px);background-position:0 46px,0 50px;background-repeat:no-repeat,no-repeat}
 .card-meta{position:absolute;top:14px;left:clamp(20px,5vw,52px);right:clamp(20px,5vw,52px);display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted)}
+.card-meta>*{min-width:0}
+.card-meta .subject-chip{overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
 .card-meta .tag{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:11.5px;padding-top:2px}
 .face{white-space:pre-wrap;overflow-wrap:anywhere;text-align:center}
 .face.front{font-family:var(--font-display);font-weight:500;font-size:clamp(24px,4.6vw,34px);line-height:1.25;flex:1;display:flex;align-items:center;justify-content:center}
@@ -340,6 +344,14 @@ h3{font-family:var(--font-hand);font-size:21px;font-weight:700}
 .date-field b{color:var(--accent);font-weight:400}
 @media (max-width:600px){.top-right{align-items:flex-start}}
 .top-line{display:flex;align-items:center;gap:10px}
+/* Readability (gear → on this device): bigger text works like browser zoom; "plain" swaps the handwriting fonts. */
+:root[data-size="l"]{zoom:1.12}
+:root[data-size="xl"]{zoom:1.25}
+/* The plain font runs much wider than the handwriting: smaller headings, and long words may break. */
+:root[data-font="plain"] h1{font-size:clamp(30px,7vw,52px);letter-spacing:-.02em}
+:root[data-font="plain"] .face.front{font-size:clamp(20px,4vw,28px)}
+h1,h2,h3{overflow-wrap:break-word}
+:root[data-font="plain"]{--font-display:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;--font-hand:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif}
 .gear{font-size:22px;line-height:1;width:40px;height:40px;padding:0;justify-content:center}
 .ui-settings{gap:14px}
 .ui-settings .sec-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -357,6 +369,8 @@ h3{font-family:var(--font-hand);font-size:21px;font-weight:700}
 .seg label{position:relative}
 .seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
 .seg span{display:inline-flex;align-items:center;min-height:38px;padding:6px 14px;border:2px solid var(--sketch);border-radius:var(--wobble-soft);cursor:pointer;font-weight:700;font-size:15px}
+.seg .font-hand{font-family:"Kalam","Segoe Print","Bradley Hand",cursive;padding:0;border:0;min-height:0}
+.seg .font-plain{font-family:"Atkinson Hyperlegible",system-ui,sans-serif;padding:0;border:0;min-height:0}
 .seg input:checked+span{background:var(--hl);color:var(--ink);border-color:var(--ink)}
 .seg input:focus-visible+span{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px}
 
@@ -588,6 +602,9 @@ const uiPref = (k, ok, fallback) => { try { const v = localStorage.getItem("kk:u
 const browserLang = () => typeof navigator !== "undefined" && navigator.language && !/^de\b/i.test(navigator.language) ? "en" : "de";
 let LANG = uiPref("lang", v => !!LANGS[v], browserLang());
 let THEME = uiPref("theme", v => THEMES.includes(v), "system");
+const SIZES = ["m", "l", "xl"], FONTS = ["hand", "plain"];
+let SIZE = uiPref("size", v => SIZES.includes(v), "m");
+let FONT = uiPref("font", v => FONTS.includes(v), "hand");
 const LOCALE = () => LANG === "en" ? "en-GB" : "de-DE";
 const weekdays = () => LANG === "en" ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] : ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 function T(s, vars) {
@@ -605,6 +622,15 @@ function setLang(l) {
   LANG = l;
   try { localStorage.setItem("kk:ui:lang", l); } catch {}
   if (typeof document !== "undefined" && document.documentElement) document.documentElement.lang = l;
+}
+// Text size and font for this device. The default value removes the attribute, so the normal styles apply.
+function setReadability(kind, v) {
+  const list = kind === "size" ? SIZES : FONTS;
+  if (!list.includes(v)) return;
+  if (kind === "size") SIZE = v; else FONT = v;
+  try { localStorage.setItem("kk:ui:" + kind, v); } catch {}
+  const root = typeof document !== "undefined" && document.documentElement;
+  if (root) { if (v === list[0]) delete root.dataset[kind]; else root.dataset[kind] = v; }
 }
 function setTheme(th) {
   if (!THEMES.includes(th)) return;
@@ -2050,6 +2076,12 @@ function uiSettingsHTML() {
     <fieldset class="seg"><legend>${T("Darstellung")}</legend>
       ${seg("ui-theme", "system", T("Wie das System"), THEME === "system")}${seg("ui-theme", "light", T("Hell"), THEME === "light")}${seg("ui-theme", "dark", T("Dunkel"), THEME === "dark")}
     </fieldset>
+    <fieldset class="seg"><legend>${T("Schriftgröße")}</legend>
+      ${seg("ui-size", "m", T("Normal"), SIZE === "m")}${seg("ui-size", "l", T("Groß"), SIZE === "l")}${seg("ui-size", "xl", T("Sehr groß"), SIZE === "xl")}
+    </fieldset>
+    <fieldset class="seg"><legend>${T("Schrift")}</legend>
+      ${seg("ui-font", "hand", `<span class="font-hand">${T("Handschrift")}</span>`, FONT === "hand")}${seg("ui-font", "plain", `<span class="font-plain">${T("Schlicht")}</span>`, FONT === "plain")}
+    </fieldset>
     <fieldset class="seg"><legend>${LANG === "en" ? "Language · Sprache" : "Sprache · Language"}</legend>
       ${Object.entries(LANGS).map(([k, name]) => seg("ui-lang", k, name, LANG === k)).join("")}
     </fieldset>
@@ -3310,6 +3342,7 @@ document.addEventListener("change", e => {
   else if (t.id === "file-restore") { openRestore(t.files[0]); t.value = ""; }
   else if (t.name === "topic-color" && state.topicEdit) state.topicEdit.color = +t.value;
   else if (t.name === "ui-theme") setTheme(t.value);
+  else if (t.name === "ui-size" || t.name === "ui-font") setReadability(t.name.slice(3), t.value);
   else if (t.id === "pref-daystart") setPref("dayStart", +t.value);
   else if (t.id === "pref-quiet") setPref("quiet", t.checked);
   else if (t.id === "pref-new") setDeckPref("newPerDay", +t.value);
@@ -3460,6 +3493,7 @@ var EN = {
   "Datum:": "Date:",
   "Einstellungen": "Settings", "Schließen": "Close", "Darstellung": "Appearance",
   "Wie das System": "Same as system", "Hell": "Light", "Dunkel": "Dark",
+  "Schriftgröße": "Text size", "Normal": "Normal", "Groß": "Large", "Sehr groß": "Extra large", "Schrift": "Font", "Handschrift": "Handwriting", "Schlicht": "Plain",
   "Auf diesem Gerät": "On this device", "Für alle Geräte": "On all devices",
   "Neuer Lerntag beginnt um": "A new study day starts at",
   "Ruhiger Modus": "Quiet mode", "Antworten heute: {a}/{b}.": "Answers today: {a}/{b}.",
