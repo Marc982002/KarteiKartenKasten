@@ -204,6 +204,13 @@ td.off{color:var(--muted);opacity:.6}
 .how summary{cursor:pointer;list-style-position:inside;font-family:var(--font-display);font-weight:700}
 .how[open] summary{margin-bottom:10px}
 .backup{display:flex;flex-direction:column;gap:10px}
+.phone{display:flex;flex-wrap:wrap;gap:16px 22px;align-items:flex-start}
+.phone .qr{width:180px;flex:0 0 180px;background:#fff;padding:6px;border:2px solid var(--sketch);border-radius:var(--wobble-soft)}
+.phone .qr svg{display:block;width:100%;height:auto}
+.phone-text{flex:1 1 240px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.phone-text p{margin:0}
+.phone-text code{overflow-wrap:anywhere}
+.pin{font-size:15px}.pin b{font-size:28px;letter-spacing:.12em;margin-left:6px;font-family:var(--font-body)}
 .nudge{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0;padding:10px 14px;border:2px dashed var(--hard);border-radius:var(--wobble-soft);font-size:15px}
 .how ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;max-width:65ch;color:var(--muted)}
 .how ol b{color:var(--ink)}
@@ -804,13 +811,20 @@ const clone = x => JSON.parse(JSON.stringify(x));
 // Talks to server.js, which keeps everything in data/karteikasten.db on this computer.
 // Every document has a revision. Writes send the revision this tab last saw; if another device
 // wrote in between, the server answers 409 and the app merges both versions (see "Several devices").
+// On a phone: a 401 means the session ended (new PIN on the computer), so reload to show the PIN page.
+const onThisComputer = () => typeof location !== "undefined" && ["localhost", "127.0.0.1", "[::1]", "::1"].includes(location.hostname);
+async function apiFetch(url, opts) {
+  const r = await fetch(url, opts);
+  if (r.status === 401 && !onThisComputer() && typeof location !== "undefined" && location.reload) location.reload();
+  return r;
+}
 function ApiStore() {
   const revs = new Map();
   async function api(method, id, body) {
     let r;
     const headers = body ? { "Content-Type": "application/json", "X-If-Rev": String(revs.get(id) ?? 0) } : {};
     try {
-      r = await fetch("/api/docs/" + encodeURIComponent(id), { method, headers, body: body ? JSON.stringify(body) : undefined });
+      r = await apiFetch("/api/docs/" + encodeURIComponent(id), { method, headers, body: body ? JSON.stringify(body) : undefined });
     } catch { throw { code: "unavailable", message: "Server nicht erreichbar" }; }
     if (r.status === 409) throw { code: "conflict", id, remote: await r.json().catch(() => null), message: "Inzwischen auf einem anderen Gerät geändert" };
     if (r.status === 404 && method === "GET") return null;
@@ -824,14 +838,14 @@ function ApiStore() {
     return null;
   }
   async function listWithRevs(kind) {
-    const r = await fetch("/api/docs?revs=1&kind=" + encodeURIComponent(kind));
+    const r = await apiFetch("/api/docs?revs=1&kind=" + encodeURIComponent(kind));
     if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
     const list = await r.json();
     for (const d of list) revs.set(d.id, d.rev);
     return list.map(d => d.data);
   }
   async function getJSON(url) {
-    const r = await fetch(url);
+    const r = await apiFetch(url);
     if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
     return r.json();
   }
@@ -857,7 +871,7 @@ function ApiStore() {
     async fetchChunks(meta) {
       const out = [];
       for (let k = 0; k < (meta.chunks || 0); k++) {
-        const r = await fetch("/api/docs/" + encodeURIComponent(chunkId(meta.id, k)));
+        const r = await apiFetch("/api/docs/" + encodeURIComponent(chunkId(meta.id, k)));
         if (!r.ok) throw { code: "unavailable", message: "Server antwortet nicht" };
         out.push({ id: chunkId(meta.id, k), rev: +(r.headers.get("X-Rev") || 0), data: await r.json() });
       }
@@ -2009,7 +2023,7 @@ function deckStats(deck) {
 /* ---------- Rendering ---------- */
 function storageLabel() {
   const k = state.store?.kind;
-  const base = k === "server" ? T("Gespeichert auf diesem Computer") : k === "local" ? T("Server nicht gefunden, nur in diesem Browser gespeichert") : T("Wird nicht gespeichert (Browser blockiert Speicher)");
+  const base = k === "server" ? (onThisComputer() || typeof location === "undefined" || !location.hostname ? T("Gespeichert auf diesem Computer") : T("Gespeichert auf deinem Computer, verbunden über WLAN")) : k === "local" ? T("Server nicht gefunden, nur in diesem Browser gespeichert") : T("Wird nicht gespeichert (Browser blockiert Speicher)");
   const st = state.save === "saving" || state.save === "pending" ? T("speichert …") : state.save === "error" ? T("Speichern fehlgeschlagen") : T("aktuell");
   const cls = state.save === "error" ? "err" : (k === "server" ? "" : "warn");
   return `<span class="dot ${cls}"></span><span id="save-label">${esc(base)} · ${st}</span>`;
@@ -2093,10 +2107,66 @@ function uiSettingsHTML() {
     </label>
     <label class="check"><input type="checkbox" id="pref-quiet" ${quiet() ? "checked" : ""}> <span><b>${T("Ruhiger Modus")}</b><br><span class="muted small">${T("Ohne Abzeichen, Serie und das Angebot weiterer neuer Karten. Abzeichen werden im Hintergrund weiter vergeben und sind wieder da, wenn du den Modus ausschaltest.")}</span></span></label>
     ${deckDefaultsHTML()}
+    ${phoneHTML()}
     ${backupHTML()}
     ${howHTML()}
   </section>`;
 }
+// Connect a phone: only offered on the computer that runs the server.
+function phoneHTML() {
+  if (state.store?.kind !== "server" || !onThisComputer()) return "";
+  const ph = state.phone, busy = state.phoneBusy;
+  const head = `<h3 class="set-group" id="phone-h">${T("Handy verbinden")}</h3>`;
+  if (!ph) return head + `<p class="muted small">${T("Lade …")}</p>`;
+  const intro = `<p class="small">${T("Lerne auf dem Handy mit denselben Karten. Handy und Computer müssen im selben WLAN sein, und die App muss auf dem Computer laufen.")}</p>`;
+  if (!ph.open) return head + intro + `
+    ${ph.on && !busy ? `<p class="error small">${T("Der Zugang ließ sich nicht einschalten. Starte die App neu und versuche es noch einmal.")}</p>` : ""}
+    <div class="row-actions"><button class="btn primary" data-act="phone-on" ${busy ? "disabled" : ""}>${busy ? T("Schalte ein …") : T("Handy-Zugang einschalten")}</button></div>
+    <p class="muted small">${T("Nur im eigenen WLAN nutzen, nicht in öffentlichen Netzen wie dem Uni-WLAN. Fragt dein Mac, ob „node“ eingehende Verbindungen annehmen darf, klicke auf „Erlauben“.")}</p>`;
+  const [first, ...more] = ph.urls;
+  const pin = String(ph.pin || "").replace(/^(\d{3})(\d{3})$/, "$1 $2");
+  return head + `
+    <div class="phone">
+      ${first ? `<div class="qr" role="img" aria-label="${T("QR-Code zum Verbinden")}">${first.qr}</div>` : ""}
+      <div class="phone-text">
+        ${first ? `<p><b>${T("Mit der Handy-Kamera scannen.")}</b> ${T("Das Handy ist danach angemeldet.")}</p>
+        <p class="small">${T("Oder im Browser des Handys öffnen und die PIN eingeben:")}<br><code>${esc(first.url)}</code>${more.map(u => ` · <code>${esc(u.url)}</code>`).join("")}</p>`
+          : `<p class="error small">${T("Kein WLAN gefunden. Verbinde den Computer mit dem WLAN und öffne die Einstellungen neu.")}</p>`}
+        <p class="pin">${T("PIN")} <b>${esc(pin)}</b></p>
+        <p class="muted small">${Tn(ph.devices, "{n} Gerät angemeldet.", "{n} Geräte angemeldet.")} ${T("Nur im eigenen WLAN nutzen, nicht in öffentlichen Netzen wie dem Uni-WLAN.")}</p>
+        <div class="row-actions">
+          ${state.phonePinConfirm
+            ? `<span class="small">${T("Neue PIN? Alle Handys müssen sich neu anmelden.")}</span><button class="btn primary sm" data-act="phone-pin-yes">${T("Neue PIN")}</button><button class="btn ghost sm" data-act="phone-pin-no">${T("Abbrechen")}</button>`
+            : `<button class="btn ghost sm" data-act="phone-pin">${T("Neue PIN …")}</button>`}
+          ${ph.fixed ? "" : `<button class="btn ghost sm" data-act="phone-off" ${busy ? "disabled" : ""}>${busy ? T("Schalte aus …") : T("Handy-Zugang ausschalten")}</button>`}
+        </div>
+        ${ph.fixed ? `<p class="muted small">${T("Der Zugang ist beim Start über HOST festgelegt und lässt sich hier nicht ausschalten.")}</p>` : ""}
+      </div>
+    </div>`;
+}
+async function loadPhone() {
+  if (state.store?.kind !== "server" || !onThisComputer()) return;
+  try { const r = await apiFetch("/api/phone"); if (r.ok) state.phone = await r.json(); } catch {}
+}
+// Switching makes the server listen somewhere else, so wait until the new state answers.
+async function setPhoneAccess(on) {
+  state.phoneBusy = true; render();
+  try {
+    await apiFetch("/api/phone", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }) });
+    for (let i = 0; i < 40; i++) {
+      await new Promise(r => setTimeout(r, 150));
+      await loadPhone();
+      if (state.phone && state.phone.open === on) break;
+    }
+  } catch {}
+  state.phoneBusy = false; render();
+}
+async function newPhonePin() {
+  state.phonePinConfirm = false;
+  try { const r = await apiFetch("/api/phone/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); if (r.ok) state.phone = await r.json(); } catch {}
+  render(); toast(T("Neue PIN erstellt. Alle Handys sind abgemeldet."));
+}
+
 // Defaults for new decks, and putting them on existing decks (with a confirmation).
 function deckDefaultsHTML() {
   const d = prefs().deck, ret = Math.round(d.retention * 100), ap = state.applyDefaults || { scope: "all" };
@@ -2925,7 +2995,7 @@ function backupNudgeHTML() {
 }
 async function loadBackupStatus() {
   if (state.store?.kind !== "server") return;
-  try { const r = await fetch("/api/backup/status"); if (r.ok) state.backup = await r.json(); } catch {}
+  try { const r = await apiFetch("/api/backup/status"); if (r.ok) state.backup = await r.json(); } catch {}
 }
 async function downloadBackup() {
   await flush();
@@ -2951,7 +3021,7 @@ async function doRestore() {
   // Unsaved changes of this tab would land on top of the restored data, so drop them.
   clearTimeout(WQ.timer); WQ.pending.clear();
   try {
-    const res = await fetch("/api/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app: "karteikasten", format: 1, created: r.created, docs: r.docs }) });
+    const res = await apiFetch("/api/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app: "karteikasten", format: 1, created: r.created, docs: r.docs }) });
     const out = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(out.error || T("Wiederherstellen fehlgeschlagen."));
   } catch (e) {
@@ -3190,7 +3260,15 @@ function treePreviewText(text) {
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
-  if (act === "ui-settings") { state.uiOpen = !state.uiOpen; render(); if (state.uiOpen) $("#ui-h")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+  if (act === "ui-settings") {
+    state.uiOpen = !state.uiOpen; render();
+    if (state.uiOpen) { $("#ui-h")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); loadPhone().then(() => { if (state.uiOpen) render(); }); }
+  }
+  else if (act === "phone-on") setPhoneAccess(true);
+  else if (act === "phone-off") setPhoneAccess(false);
+  else if (act === "phone-pin") { state.phonePinConfirm = true; render(); }
+  else if (act === "phone-pin-no") { state.phonePinConfirm = false; render(); }
+  else if (act === "phone-pin-yes") newPhonePin();
   else if (act === "ui-backup") { state.uiOpen = true; render(); $("#backup-h")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   else if (act === "pref-apply") { state.applyDefaults = { scope: "all", ...state.applyDefaults, confirm: true }; render(); }
   else if (act === "pref-apply-no") { state.applyDefaults = { ...state.applyDefaults, confirm: false }; render(); }
@@ -3496,6 +3574,20 @@ var EN = {
   "Schriftgröße": "Text size", "Normal": "Normal", "Groß": "Large", "Sehr groß": "Extra large", "Schrift": "Font", "Handschrift": "Handwriting", "Schlicht": "Plain",
   "Auf diesem Gerät": "On this device", "Für alle Geräte": "On all devices",
   "Neuer Lerntag beginnt um": "A new study day starts at",
+  "Handy verbinden": "Connect a phone", "Gespeichert auf deinem Computer, verbunden über WLAN": "Saved on your computer, connected via Wi-Fi", "Lade …": "Loading …",
+  "Lerne auf dem Handy mit denselben Karten. Handy und Computer müssen im selben WLAN sein, und die App muss auf dem Computer laufen.": "Study on your phone with the same cards. Phone and computer need to be on the same Wi-Fi, and the app needs to be running on the computer.",
+  "Der Zugang ließ sich nicht einschalten. Starte die App neu und versuche es noch einmal.": "Phone access could not be turned on. Restart the app and try again.",
+  "Schalte ein …": "Turning on …", "Handy-Zugang einschalten": "Turn on phone access",
+  "Nur im eigenen WLAN nutzen, nicht in öffentlichen Netzen wie dem Uni-WLAN. Fragt dein Mac, ob „node“ eingehende Verbindungen annehmen darf, klicke auf „Erlauben“.": "Only use this on your own Wi-Fi, not on public networks like the university Wi-Fi. If your Mac asks whether “node” may accept incoming connections, click “Allow”.",
+  "QR-Code zum Verbinden": "QR code to connect", "Mit der Handy-Kamera scannen.": "Scan with your phone's camera.", "Das Handy ist danach angemeldet.": "Your phone is then signed in.",
+  "Oder im Browser des Handys öffnen und die PIN eingeben:": "Or open this in your phone's browser and enter the PIN:",
+  "Kein WLAN gefunden. Verbinde den Computer mit dem WLAN und öffne die Einstellungen neu.": "No Wi-Fi found. Connect the computer to Wi-Fi and open the settings again.",
+  "PIN": "PIN", "{n} Gerät angemeldet.": "{n} device signed in.", "{n} Geräte angemeldet.": "{n} devices signed in.",
+  "Nur im eigenen WLAN nutzen, nicht in öffentlichen Netzen wie dem Uni-WLAN.": "Only use this on your own Wi-Fi, not on public networks like the university Wi-Fi.",
+  "Neue PIN? Alle Handys müssen sich neu anmelden.": "New PIN? All phones will need to sign in again.", "Neue PIN": "New PIN", "Neue PIN …": "New PIN …",
+  "Schalte aus …": "Turning off …", "Handy-Zugang ausschalten": "Turn off phone access",
+  "Der Zugang ist beim Start über HOST festgelegt und lässt sich hier nicht ausschalten.": "Access was set with HOST at start-up and can't be turned off here.",
+  "Neue PIN erstellt. Alle Handys sind abgemeldet.": "New PIN created. All phones are signed out.",
   "Ruhiger Modus": "Quiet mode", "Antworten heute: {a}/{b}.": "Answers today: {a}/{b}.",
   "Ohne Abzeichen, Serie und das Angebot weiterer neuer Karten. Abzeichen werden im Hintergrund weiter vergeben und sind wieder da, wenn du den Modus ausschaltest.": "No badges, streak or offers of extra new cards. Badges are still earned in the background and come back when you turn quiet mode off.",
   "Deine letzte heruntergeladene Sicherung ist von {when}.": "Your last downloaded backup is from {when}.",

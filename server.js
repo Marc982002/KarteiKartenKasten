@@ -6,17 +6,20 @@ import path from "node:path";
 import { readFile, writeFile, rename, readdir, stat, unlink, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { randomBytes, randomInt, timingSafeEqual, createHash } from "node:crypto";
+import qrcode from "qrcode-generator";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 4321;
-const HOST = process.env.HOST || "127.0.0.1";
+// HOST set by hand decides where the server listens; otherwise the phone setting in the app does (see below).
+const HOST_ENV = process.env.HOST || null;
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, "backups");
 const BACKUP_KEEP = 14;            // daily automatic backups kept
 const BACKUP_KEEP_RESTORE = 5;     // snapshots taken right before a restore
 const MAX_BODY = 5 * 1024 * 1024;
 const MAX_RESTORE = 200 * 1024 * 1024;
-const LOOPBACK_ONLY = HOST === "127.0.0.1" || HOST === "localhost" || HOST === "::1";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 /* ---------- Storage: one table of JSON documents ---------- */
 await mkdir(DATA_DIR, { recursive: true });
@@ -139,6 +142,106 @@ function replaceAll(docs) {
   } catch (e) { db.exec("ROLLBACK"); throw e; }
 }
 
+/* ---------- Phone access ----------
+   Off: the server only listens on this computer, as before. On: it also listens on the Wi-Fi.
+   Requests from this computer never need anything. Every other device enters a 6-digit PIN once
+   and then gets a session cookie. A new PIN signs all devices out. Too many wrong PINs: a pause. */
+const meta = k => sql.getMeta.get(k)?.value ?? null;
+const PIN_TRIES = 5, PIN_TRIES_ALL = 30, PIN_WINDOW = 10 * 60 * 1000, MAX_SESSIONS = 20;
+const hashToken = t => createHash("sha256").update(t).digest("hex");
+function sessions() { try { const l = JSON.parse(meta("phoneSessions") || "[]"); return Array.isArray(l) ? l : []; } catch { return []; } }
+function resetPin() {
+  sql.setMeta.run("phonePin", String(randomInt(0, 1000000)).padStart(6, "0"));
+  sql.setMeta.run("phoneSessions", "[]");
+}
+function newSession() {
+  const token = randomBytes(24).toString("base64url");
+  sql.setMeta.run("phoneSessions", JSON.stringify([...sessions().slice(-(MAX_SESSIONS - 1)), hashToken(token)]));
+  return token;
+}
+const sessionCookie = token => `kk_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`;
+function hasSession(req) {
+  const m = /(?:^|;\s*)kk_session=([A-Za-z0-9_-]{10,100})/.exec(req.headers.cookie || "");
+  return !!m && sessions().includes(hashToken(m[1]));
+}
+function pinOk(given) {
+  const pin = meta("phonePin");
+  return !!pin && typeof given === "string" && given.length === pin.length && timingSafeEqual(Buffer.from(given), Buffer.from(pin));
+}
+const fails = new Map(); // ip -> times of wrong PINs
+function blocked(ip) {
+  const now = Date.now();
+  for (const [k, list] of fails) { const keep = list.filter(t => now - t < PIN_WINDOW); keep.length ? fails.set(k, keep) : fails.delete(k); }
+  const all = [...fails.values()].reduce((a, l) => a + l.length, 0);
+  return (fails.get(ip)?.length || 0) >= PIN_TRIES || all >= PIN_TRIES_ALL;
+}
+const failed = ip => (fails.get(ip) || fails.set(ip, []).get(ip)).push(Date.now());
+const isLocalPeer = req => ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
+const lanAddresses = () => Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === "IPv4" && !i.internal).map(i => i.address);
+const wantedHost = () => HOST_ENV || (meta("phoneOn") === "1" ? "0.0.0.0" : "127.0.0.1");
+let server = null, currentHost = null;
+const isOpen = () => !LOOPBACK_HOSTS.has(currentHost);
+
+function phoneStatus() {
+  const open = isOpen(), pin = meta("phonePin"), port = server?.address()?.port ?? PORT;
+  const urls = open && pin ? lanAddresses().map(ip => {
+    const url = `http://${ip}:${port}/`, q = qrcode(0, "M");
+    q.addData(`${url}?pin=${pin}`); q.make();
+    return { url, qr: q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }) };
+  }) : [];
+  return { on: open || meta("phoneOn") === "1", open, fixed: !!HOST_ENV, pin: open ? pin : null, urls, devices: sessions().length };
+}
+const LOGIN_TEXT = {
+  de: { title: "Karteikasten", lead: "Gib die PIN ein, die auf deinem Computer im Rädchen ⚙︎ unter „Handy verbinden“ steht.", go: "Verbinden", wrong: "Die PIN stimmt nicht.", wait: "Zu viele falsche Versuche. Warte ein paar Minuten." },
+  en: { title: "Karteikasten", lead: "Enter the PIN shown on your computer under the gear ⚙︎, “Connect a phone”.", go: "Connect", wrong: "That PIN is not right.", wait: "Too many wrong tries. Wait a few minutes." }
+};
+function loginPage(req, note) {
+  const t = /^de\b/i.test(req.headers["accept-language"] || "") ? LOGIN_TEXT.de : LOGIN_TEXT.en;
+  return `<!doctype html><html lang="${t === LOGIN_TEXT.de ? "de" : "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${t.title}</title><style>body{font-family:system-ui,sans-serif;background:#fbfcfd;color:#24282f;margin:0;padding:48px 20px;display:flex;justify-content:center}
+@media (prefers-color-scheme:dark){body{background:#1b1f26;color:#e7e9ee}h1{color:#93b1ff!important}.note{color:#ee6e64!important}}
+main{max-width:340px;display:flex;flex-direction:column;gap:14px}h1{margin:0;color:#2343b0;font-size:32px}p{margin:0;line-height:1.5}
+input{font:inherit;font-size:28px;letter-spacing:.3em;text-align:center;padding:10px;border:2px solid #5f6674;border-radius:10px;width:100%;box-sizing:border-box}
+button{font:inherit;font-weight:700;font-size:17px;padding:12px;border-radius:10px;border:2px solid #24282f;background:#fff07a;color:#24282f}.note{color:#c4433a;font-weight:700}</style></head>
+<body><main><h1>${t.title}</h1><p>${t.lead}</p>${note ? `<p class="note">${t[note]}</p>` : ""}
+<form method="post" action="/login"><input name="pin" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" autofocus aria-label="PIN"><br><br><button>${t.go}</button></form></main></body></html>`;
+}
+// Checks a PIN from the QR code link or the form. Right: cookie and back to the app; wrong: the form again.
+function tryPin(req, res, pin) {
+  const ip = req.socket.remoteAddress;
+  if (blocked(ip)) return send(res, 429, loginPage(req, "wait"), "text/html; charset=utf-8");
+  if (!pinOk(pin)) { failed(ip); return send(res, 401, loginPage(req, "wrong"), "text/html; charset=utf-8"); }
+  return send(res, 303, "", "text/plain", { Location: "/", "Set-Cookie": sessionCookie(newSession()) });
+}
+// Listens on the host the setting asks for. Called at start and when the setting changes.
+function listenOn(host) {
+  return new Promise((resolve, reject) => {
+    const s = http.createServer(onRequest);
+    s.once("error", reject);
+    s.listen(PORT, host, () => { s.off("error", reject); s.on("error", e => console.error(e)); resolve(s); });
+  });
+}
+async function rebind() {
+  const host = wantedHost();
+  if (host === currentHost) return;
+  const old = server, oldHost = currentHost;
+  old.close(); old.closeAllConnections(); // also ends connections a phone still holds open
+  for (let i = 0; ; i++) {
+    try { server = await listenOn(host); currentHost = host; break; }
+    catch (e) {
+      if (e.code === "EADDRINUSE" && i < 30) { await new Promise(r => setTimeout(r, 100)); continue; }
+      console.error("Umschalten fehlgeschlagen:", e.message);
+      server = await listenOn(oldHost); currentHost = oldHost; return;
+    }
+  }
+  logAddresses();
+}
+function logAddresses() {
+  if (!isOpen()) { console.log("Nur auf diesem Computer erreichbar."); return; }
+  for (const ip of lanAddresses()) console.log(`Im WLAN erreichbar: http://${ip}:${PORT}`);
+  console.log(`Andere Geräte brauchen die PIN ${meta("phonePin")} (steht auch in der App im Rädchen).`);
+}
+
 /* ---------- HTTP ---------- */
 const STATIC = {
   "/": ["public/index.html", "text/html; charset=utf-8"],
@@ -166,13 +269,45 @@ function readBody(req, limit = MAX_BODY) {
 }
 
 async function handle(req, res) {
-  // When only reachable from this Mac, answer only requests addressed to it by name.
-  // This blocks websites that try to reach the server through DNS tricks.
+  // Answer only requests addressed to this computer by name (or, with phone access, by its Wi-Fi address).
+  // This blocks websites that try to reach the server through DNS tricks. HOST set by hand to the network: no name check, as before.
   const hostName = (req.headers.host || "").replace(/:\d+$/, "");
-  if (LOOPBACK_ONLY && !LOCAL_NAMES.has(hostName)) return send(res, 403, { error: "Unbekannter Host" });
+  const nameCheck = !HOST_ENV || LOOPBACK_HOSTS.has(HOST_ENV);
+  if (nameCheck && !LOCAL_NAMES.has(hostName) && !(isOpen() && lanAddresses().includes(hostName))) return send(res, 403, { error: "Unbekannter Host" });
 
   const url = new URL(req.url, "http://localhost");
   const p = url.pathname;
+
+  // Other devices: the PIN once, then the session cookie. Phone settings only from this computer.
+  if (!isLocalPeer(req)) {
+    if (p === "/login" && req.method === "POST") return tryPin(req, res, new URLSearchParams(await readBody(req, 1024)).get("pin") || "");
+    if (!hasSession(req)) {
+      if (req.method === "GET" && (p === "/" || p === "/index.html")) {
+        const pin = url.searchParams.get("pin");
+        return pin != null ? tryPin(req, res, pin) : send(res, 200, loginPage(req), "text/html; charset=utf-8");
+      }
+      return send(res, 401, { error: "PIN nötig" });
+    }
+    if (p.startsWith("/api/phone")) return send(res, 403, { error: "Nur auf dem Computer" });
+  }
+
+  if (p === "/api/phone") {
+    if (req.method === "GET") return send(res, 200, phoneStatus());
+    if (req.method !== "POST") return send(res, 405, { error: "Methode nicht erlaubt" });
+    if (!(req.headers["content-type"] || "").startsWith("application/json")) return send(res, 415, { error: "JSON erwartet" });
+    if (HOST_ENV) return send(res, 409, { error: "Über HOST festgelegt" });
+    let body; try { body = JSON.parse(await readBody(req, 1024)); } catch { return send(res, 400, { error: "Kein gültiges JSON" }); }
+    sql.setMeta.run("phoneOn", body?.on ? "1" : "0");
+    if (body?.on && !meta("phonePin")) resetPin();
+    res.on("finish", () => rebind().catch(e => console.error(e))); // after the answer: switching drops open connections
+    return send(res, 200, { ok: true });
+  }
+  if (p === "/api/phone/pin") {
+    if (req.method !== "POST") return send(res, 405, { error: "Methode nicht erlaubt" });
+    if (!(req.headers["content-type"] || "").startsWith("application/json")) return send(res, 415, { error: "JSON erwartet" });
+    resetPin();
+    return send(res, 200, phoneStatus());
+  }
 
   if (p === "/api/health") return send(res, 200, { ok: true });
 
@@ -253,30 +388,27 @@ async function handle(req, res) {
   return send(res, 404, { error: "Nicht gefunden" });
 }
 
-const server = http.createServer((req, res) => {
+function onRequest(req, res) {
   handle(req, res).catch(e => {
     if (!e.status) console.error(e);
     if (!res.headersSent) send(res, e.status || 500, { error: e.status ? e.message : "Serverfehler" });
   });
-});
+}
 
-server.on("error", e => {
+try {
+  currentHost = wantedHost();
+  if (isOpen() && !meta("phonePin")) resetPin(); // HOST set by hand to the network: other devices need a PIN too
+  server = await listenOn(currentHost);
+} catch (e) {
   if (e.code === "EADDRINUSE") console.error(`Port ${PORT} ist schon belegt. Starte mit einem anderen Port, z. B.: PORT=4322 npm start`);
   else console.error(e);
   process.exit(1);
-});
-
-server.listen(PORT, HOST, () => {
-  console.log(`Karteikasten läuft: http://localhost:${PORT}`);
-  console.log(`Daten: ${path.join(DATA_DIR, "karteikasten.db")}`);
-  console.log(`Sicherungen: ${BACKUP_DIR}`);
-  if (!LOOPBACK_ONLY) {
-    const ips = Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === "IPv4" && !i.internal).map(i => i.address);
-    for (const ip of ips) console.log(`Im WLAN erreichbar: http://${ip}:${PORT}`);
-    console.log("Achtung: Ohne Passwort. Jeder im selben Netz kann die Stapel sehen und ändern.");
-  }
-  console.log("Beenden mit Ctrl+C.");
-});
+}
+console.log(`Karteikasten läuft: http://localhost:${PORT}`);
+console.log(`Daten: ${path.join(DATA_DIR, "karteikasten.db")}`);
+console.log(`Sicherungen: ${BACKUP_DIR}`);
+if (isOpen()) logAddresses();
+console.log("Beenden mit Ctrl+C.");
 
 autoBackup();
 setInterval(autoBackup, 60 * 60 * 1000).unref();
