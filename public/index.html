@@ -7,6 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Caveat:wght@500;700&family=Kalam:wght@400;700&display=swap">
+<script>
+// Theme and language from the settings, applied before the page draws (no flash of the wrong colours).
+try {
+  var th = localStorage.getItem("kk:ui:theme"); if (th === "light" || th === "dark") document.documentElement.dataset.theme = th;
+  var lg = localStorage.getItem("kk:ui:lang") || (/^de\b/i.test(navigator.language || "") ? "de" : "en"); document.documentElement.lang = lg === "en" ? "en" : "de";
+} catch (e) {}
+</script>
 <style>
 /* Layout: one torn-out sheet of ruled notebook paper (punched holes, red margin) lying on a desk.
    Notes inside are squared paper with torn tops; ballpoint blue is the accent, highlighters mark things. */
@@ -328,6 +335,17 @@ h3{font-family:var(--font-hand);font-size:21px;font-weight:700}
 .date-field{font-family:var(--font-hand);font-size:15px;color:var(--muted);border-bottom:1.5px solid var(--sketch);padding:0 2px 1px 6px}
 .date-field b{color:var(--accent);font-weight:400}
 @media (max-width:600px){.top-right{align-items:flex-start}}
+.top-line{display:flex;align-items:center;gap:10px}
+.gear{font-size:22px;line-height:1;width:40px;height:40px;padding:0;justify-content:center}
+.ui-settings{gap:14px}
+.ui-settings .sec-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.seg{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:0}
+.seg legend{font-weight:700;margin-bottom:8px;padding:0}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:inline-flex;align-items:center;min-height:38px;padding:6px 14px;border:2px solid var(--sketch);border-radius:var(--wobble-soft);cursor:pointer;font-weight:700;font-size:15px}
+.seg input:checked+span{background:var(--hl);color:var(--ink);border-color:var(--ink)}
+.seg input:focus-visible+span{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px}
 
 /* Sketched controls: wobbly hand-drawn outlines */
 .btn{border-radius:var(--wobble);border-width:2px;font-weight:700}
@@ -538,26 +556,61 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const rid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
 const dayKey = (t = Date.now()) => { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 const endOfToday = () => { const d = new Date(); d.setHours(24, 0, 0, 0); return d.getTime(); };
-const pct = x => Math.round(x * 100) + " %";
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: "timeout" }), ms))]);
 const utf8len = s => new TextEncoder().encode(s).length;
 
+/* ---------- Language and theme (the settings behind the gear) ----------
+   German is the source text: T("Text mit {n}", { n }) gives the English version when English is on,
+   filled in with the values. The English texts are in EN at the end of this script.
+   A test checks that every text in T() and Tn() has an English version. */
+const LANGS = { de: "Deutsch", en: "English" };
+const THEMES = ["system", "light", "dark"];
+const uiPref = (k, ok, fallback) => { try { const v = localStorage.getItem("kk:ui:" + k); return ok(v) ? v : fallback; } catch { return fallback; } };
+const browserLang = () => typeof navigator !== "undefined" && navigator.language && !/^de\b/i.test(navigator.language) ? "en" : "de";
+let LANG = uiPref("lang", v => !!LANGS[v], browserLang());
+let THEME = uiPref("theme", v => THEMES.includes(v), "system");
+const LOCALE = () => LANG === "en" ? "en-GB" : "de-DE";
+const weekdays = () => LANG === "en" ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] : ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+function T(s, vars) {
+  let out = LANG === "en" && typeof EN !== "undefined" && EN[s] != null ? EN[s] : s;
+  if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
+  return out;
+}
+// Singular or plural: Tn(3, "{n} Karte", "{n} Karten").
+const Tn = (n, one, many, vars) => T(n === 1 ? one : many, { n, ...vars });
+const num = x => LANG === "en" ? String(x) : String(x).replace(".", ",");
+const pctN = n => n + (LANG === "en" ? "%" : " %");
+const pct = x => pctN(Math.round(x * 100));
+function setLang(l) {
+  if (!LANGS[l]) return;
+  LANG = l;
+  try { localStorage.setItem("kk:ui:lang", l); } catch {}
+  if (typeof document !== "undefined" && document.documentElement) document.documentElement.lang = l;
+}
+function setTheme(th) {
+  if (!THEMES.includes(th)) return;
+  THEME = th;
+  try { localStorage.setItem("kk:ui:theme", th); } catch {}
+  const root = typeof document !== "undefined" && document.documentElement;
+  if (root) { if (th === "system") delete root.dataset.theme; else root.dataset.theme = th; }
+}
+
 function fmtDur(ms) {
   const m = ms / MIN;
-  if (m < 60) return Math.max(1, Math.round(m)) + " Min";
+  if (m < 60) return T("{n} Min", { n: Math.max(1, Math.round(m)) });
   const h = m / 60;
-  if (h < 22) return Math.round(h) + " Std";
+  if (h < 22) return T("{n} Std", { n: Math.round(h) });
   const d = Math.max(1, Math.round(ms / DAY));
-  if (d < 31) return d + (d === 1 ? " Tag" : " Tage");
-  if (d < 365) return String(+(d / 30.4).toFixed(d < 61 ? 1 : 0)).replace(".", ",") + " Mon.";
-  return String(+(d / 365).toFixed(1)).replace(".", ",") + " J.";
+  if (d < 31) return Tn(d, "{n} Tag", "{n} Tage");
+  if (d < 365) return T("{n} Mon.", { n: num(+(d / 30.4).toFixed(d < 61 ? 1 : 0)) });
+  return T("{n} J.", { n: num(+(d / 365).toFixed(1)) });
 }
 function fmtAgo(ms) {
   const d = Math.floor(ms / DAY);
-  if (ms < 60 * MIN) return "vor " + Math.max(1, Math.round(ms / MIN)) + " Min";
-  if (d < 1) return "vor " + Math.round(ms / 3600000) + " Std";
-  if (d === 1) return "gestern";
-  return "vor " + d + " Tagen";
+  if (ms < 60 * MIN) return T("vor {n} Min", { n: Math.max(1, Math.round(ms / MIN)) });
+  if (d < 1) return T("vor {n} Std", { n: Math.round(ms / 3600000) });
+  if (d === 1) return T("gestern");
+  return T("vor {n} Tagen", { n: d });
 }
 
 /* ---------- Built-in FSRS-5 scheduler (fallback if ts-fsrs cannot load) ---------- */
@@ -622,7 +675,7 @@ function fuzz(st, now) {
 
 /* ---------- Scheduler: official ts-fsrs (FSRS-6), built-in FSRS-5 as fallback ---------- */
 const TS = window.FSRS && typeof window.FSRS.fsrs === "function" ? window.FSRS : null;
-const ENGINE = TS ? "FSRS-6 über die offizielle Bibliothek ts-fsrs" : "FSRS-5 (eingebaute Version, ts-fsrs fehlt: einmal npm install ausführen)";
+const ENGINE = TS ? "FSRS-6 über die offizielle Bibliothek ts-fsrs" : "FSRS-5 (eingebaute Version, ts-fsrs fehlt: einmal npm install ausführen)"; // shown via T()
 const tsSchedulers = new Map();
 function tsScheduler(ret) {
   const k = ret.toFixed(3);
@@ -739,7 +792,7 @@ function LocalStore() {
   const mem = {}; let ls = null;
   try { ls = window.localStorage; ls.setItem("kk:t", "1"); ls.removeItem("kk:t"); } catch { ls = null; }
   const get = k => { try { const v = ls ? ls.getItem(k) : mem[k]; return v == null ? null : JSON.parse(v); } catch { return null; } };
-  const set = (k, v) => { const s = JSON.stringify(v); if (ls) { try { ls.setItem(k, s); return; } catch { throw { code: "quota_exceeded", message: "Der Speicher dieses Browsers ist voll." }; } } mem[k] = s; };
+  const set = (k, v) => { const s = JSON.stringify(v); if (ls) { try { ls.setItem(k, s); return; } catch { throw { code: "quota_exceeded", message: T("Der Speicher dieses Browsers ist voll.") }; } } mem[k] = s; };
   const del = k => { try { ls ? ls.removeItem(k) : delete mem[k]; } catch {} };
   const index = () => get("kk:index") || [];
   return {
@@ -785,15 +838,15 @@ async function flush() {
             const how = n <= 5 ? resolveConflict(key, e) : "fail";
             if (how === "retry") { if (!WQ.pending.has(key)) WQ.pending.set(key, fn); SYNC.merged = true; continue; }
             if (how === "drop") { WQ.conflicts.delete(key); setTimeout(() => pullChanges(), 0); continue; }
-            failed = true; toast("Zwei Geräte haben gleichzeitig gespeichert und das Zusammenführen hat nicht geklappt. Lade die Seite neu."); continue;
+            failed = true; toast(T("Zwei Geräte haben gleichzeitig gespeichert und das Zusammenführen hat nicht geklappt. Lade die Seite neu.")); continue;
           }
           if ((e?.code === "unavailable" || e?.code === "resource_exhausted") && !WQ.retried.has(key)) {
             WQ.retried.add(key); setTimeout(() => queueWrite(key, fn, 0), 1500 + Math.random() * 1500);
           } else {
             failed = true;
-            toast(e?.code === "quota_exceeded" ? "Speicher voll: " + (e.message || "Lösche einen Stapel, um Platz zu schaffen.")
-              : state.store.kind === "server" && e?.code === "unavailable" ? "Der Server antwortet nicht. Läuft er noch? Dein Fortschritt seit dem letzten Speichern ist nur in diesem Tab."
-              : "Speichern fehlgeschlagen. Dein Fortschritt seit dem letzten Speichern ist nur in diesem Tab.");
+            toast(e?.code === "quota_exceeded" ? T("Speicher voll: {msg}", { msg: e.message || T("Lösche einen Stapel, um Platz zu schaffen.") })
+              : state.store.kind === "server" && e?.code === "unavailable" ? T("Der Server antwortet nicht. Läuft er noch? Dein Fortschritt seit dem letzten Speichern ist nur in diesem Tab.")
+              : T("Speichern fehlgeschlagen. Dein Fortschritt seit dem letzten Speichern ist nur in diesem Tab."));
           }
         }
       }
@@ -802,7 +855,7 @@ async function flush() {
   setSave(failed ? "error" : "saved");
   if (SYNC.merged) {
     SYNC.merged = false;
-    toast("Auf einem anderen Gerät wurde gleichzeitig gelernt. Beide Stände sind zusammengeführt.");
+    toast(T("Auf einem anderen Gerät wurde gleichzeitig gelernt. Beide Stände sind zusammengeführt."));
     if (!isTyping()) render();
   }
 }
@@ -833,6 +886,7 @@ window.addEventListener("pagehide", flush);
 /* ---------- App state ---------- */
 const state = {
   store: null, decks: [], cards: {}, view: "home", loading: true, loadError: null,
+  uiOpen: false,       // the gear panel (theme, language)
   open: null,          // { id, tab: "stats" | "settings" }
   confirmDelete: null, // deck id
   draft: null,         // import draft
@@ -1191,7 +1245,7 @@ function recordAnswer(deck, u, g, now, info = null) {
   }
   days[day] = (days[day] || 0) + 1;
   markLog(); markProfile();
-  if (days[day] === state.profile.goal) toast("Tagesziel erreicht. Serie: " + streakInfo().n + (streakInfo().n === 1 ? " Tag" : " Tage") + ".");
+  if (days[day] === state.profile.goal) toast(T("Tagesziel erreicht. Serie: {days}.", { days: Tn(streakInfo().n, "{n} Tag", "{n} Tage") }));
 }
 function unrecordAnswer() {
   const day = state.log.day;
@@ -1227,19 +1281,19 @@ function historyHTML(u, ans) {
   const prev = state.attempts.get(u.card.i + ":" + u.dir) || [];
   if (!prev.length) return "";
   const shown = prev.slice(-6);
-  const chips = shown.map(e => `<span class="hchip" style="--c:var(${GRADE_C[e[2]]})" title="${new Date(e[3]).toLocaleString("de-DE")}">${GRADE[e[2]]}</span>`).join(`<span class="harrow" aria-hidden="true">→</span>`);
+  const chips = shown.map(e => `<span class="hchip" style="--c:var(${GRADE_C[e[2]]})" title="${new Date(e[3]).toLocaleString(LOCALE())}">${T(GRADE[e[2]])}</span>`).join(`<span class="harrow" aria-hidden="true">→</span>`);
   const lastKw = [...prev].reverse().find(e => e[5]?.f), lastTxt = [...prev].reverse().find(e => e[5]?.a);
   let cmp = "";
   if (lastKw && ans?.method === "keywords") {
     const pf = lastKw[5].f.length, pn = pf + lastKw[5].x.length, nf = ans.found.length, nn = nf + ans.missing.length;
     const was = pn ? pf / pn : 0, now = nn ? nf / nn : 0;
     const dir = now > was + 0.001 ? "up" : now < was - 0.001 ? "down" : "same";
-    cmp = `<p class="hcmp ${dir}">Letztes Mal ${pf} von ${pn} Begriffen, heute ${nf} von ${nn}${dir === "up" ? " · besser geworden ↑" : dir === "down" ? " · weniger als letztes Mal" : " · gleich viele"}</p>`;
+    cmp = `<p class="hcmp ${dir}">${T("Letztes Mal {pf} von {pn} Begriffen, heute {nf} von {nn}", { pf, pn, nf, nn })} · ${dir === "up" ? T("besser geworden ↑") : dir === "down" ? T("weniger als letztes Mal") : T("gleich viele")}</p>`;
   }
   return `<div class="history">
-    <div class="hline"><span class="hlabel">Deine Entwicklung${prev.length > shown.length ? ` (letzte ${shown.length} von ${prev.length})` : ""}:</span>${chips}<span class="harrow" aria-hidden="true">→</span><span class="hnow">heute</span></div>
+    <div class="hline"><span class="hlabel">${T("Deine Entwicklung")}${prev.length > shown.length ? " " + T("(letzte {a} von {b})", { a: shown.length, b: prev.length }) : ""}:</span>${chips}<span class="harrow" aria-hidden="true">→</span><span class="hnow">${T("heute")}</span></div>
     ${cmp}
-    ${lastTxt ? `<details class="hprev-box"><summary>Deine letzte Antwort (${fmtAgo(Date.now() - lastTxt[3])})</summary><p class="hprev">${esc(lastTxt[5].a)}</p></details>` : ""}
+    ${lastTxt ? `<details class="hprev-box"><summary>${T("Deine letzte Antwort ({ago})", { ago: fmtAgo(Date.now() - lastTxt[3]) })}</summary><p class="hprev">${esc(lastTxt[5].a)}</p></details>` : ""}
   </div>`;
 }
 
@@ -1309,7 +1363,7 @@ function checkBadges({ silent = false } = {}) {
   if (!fresh.length) return [];
   for (const b of fresh) have[b.id] = Date.now();
   markProfile();
-  if (!silent) toast((fresh.length === 1 ? "Neues Abzeichen: " : "Neue Abzeichen: ") + fresh.map(b => b.name).join(", "));
+  if (!silent) toast(Tn(fresh.length, "Neues Abzeichen: {list}", "Neue Abzeichen: {list}", { list: fresh.map(b => T(b.name)).join(", ") }));
   return fresh;
 }
 // "Alles erledigt": nothing due and no new-card allowance left in any deck today.
@@ -1361,12 +1415,12 @@ function checkAnswer(given, correct) {
   for (const a of alts) {
     if (g === a) return { verdict: "right", suggest: 3 };
     if (best.verdict === "close") continue;
-    if (stripMarks(g) === stripMarks(a)) best = { verdict: "close", note: "Achte auf Akzente und Sonderzeichen.", suggest: 2 };
-    else if (g.replace(ARTICLES, "") === a.replace(ARTICLES, "")) best = { verdict: "close", note: "Das kleine Wort am Anfang (der, die, das, to …) fehlt oder stimmt nicht.", suggest: 2 };
+    if (stripMarks(g) === stripMarks(a)) best = { verdict: "close", note: T("Achte auf Akzente und Sonderzeichen."), suggest: 2 };
+    else if (g.replace(ARTICLES, "") === a.replace(ARTICLES, "")) best = { verdict: "close", note: T("Das kleine Wort am Anfang (der, die, das, to …) fehlt oder stimmt nicht."), suggest: 2 };
     else {
       const ga = stripMarks(g.replace(ARTICLES, "")), aa = stripMarks(a.replace(ARTICLES, ""));
       const tol = aa.length <= 3 ? 0 : aa.length <= 7 ? 1 : 2;
-      if (lev(ga, aa) <= tol) best = { verdict: "close", note: "Kleiner Tippfehler.", suggest: 2 };
+      if (lev(ga, aa) <= tol) best = { verdict: "close", note: T("Kleiner Tippfehler."), suggest: 2 };
     }
   }
   return best;
@@ -1617,14 +1671,14 @@ function extraOfferHTML(off, decks, { inline = false } = {}) {
   if (off.ok) {
     const cost = Math.round(off.n * reviewsPerNewCard(decks));
     return `<div class="extra-offer ${inline ? "inline" : ""}" role="status">
-      <p><b>${off.learned} von ${off.started} neuen Karten sitzen.</b> Du kannst ${off.n} weitere aufnehmen${cost ? `. Das bringt etwa ${cost} Wiederholungen in den nächsten 7 Tagen` : ""}.</p>
-      <div class="row-actions"><button class="btn primary sm" data-act="extra-new">${off.n} neue Karten aufnehmen</button>${inline ? `<button class="btn ghost sm" data-act="extra-no">Nicht jetzt</button>` : ""}</div>
+      <p><b>${T("{a} von {b} neuen Karten sitzen.", { a: off.learned, b: off.started })}</b> ${cost ? T("Du kannst {n} weitere aufnehmen. Das bringt etwa {cost} Wiederholungen in den nächsten 7 Tagen.", { n: off.n, cost }) : T("Du kannst {n} weitere aufnehmen.", { n: off.n })}</p>
+      <div class="row-actions"><button class="btn primary sm" data-act="extra-new">${Tn(off.n, "{n} neue Karte aufnehmen", "{n} neue Karten aufnehmen")}</button>${inline ? `<button class="btn ghost sm" data-act="extra-no">${T("Nicht jetzt")}</button>` : ""}</div>
     </div>`;
   }
   if (inline) return "";
-  const why = off.reason === "double" ? "Heute hast du schon doppelt so viele neue Karten wie dein Tageslimit. Mehr auf einmal macht die nächsten Tage schwer."
-    : off.reason === "hard" ? `Bei den Wiederholungen deiner neuen Karten hast du heute ${pct(off.hitRate)} gewusst. Ab 70 % geht es weiter, sonst lieber morgen, wenn sich das gesetzt hat.`
-    : `${off.learned} von ${off.started} neuen Karten sitzen schon. Sobald es drei Viertel sind, kannst du weitere aufnehmen.`;
+  const why = off.reason === "double" ? T("Heute hast du schon doppelt so viele neue Karten wie dein Tageslimit. Mehr auf einmal macht die nächsten Tage schwer.")
+    : off.reason === "hard" ? T("Bei den Wiederholungen deiner neuen Karten hast du heute {p} gewusst. Ab {min} geht es weiter, sonst lieber morgen, wenn sich das gesetzt hat.", { p: pct(off.hitRate), min: pctN(70) })
+    : T("{a} von {b} neuen Karten sitzen schon. Sobald es drei Viertel sind, kannst du weitere aufnehmen.", { a: off.learned, b: off.started });
   return `<p class="muted small">${why}</p>`;
 }
 function addExtraNew() {
@@ -1634,7 +1688,7 @@ function addExtraNew() {
   const units = pickExtra(decks, off.n);
   s.main.push(...units); // once these sit too, the next pack is offered again
   if (s.finished || !s.current) { s.finished = false; advance(); }
-  toast(units.length + " neue Karten aufgenommen. Sie kommen zwischen die Karten, die du gerade lernst.");
+  toast(Tn(units.length, "{n} neue Karte aufgenommen. Sie kommt zwischen die Karten, die du gerade lernst.", "{n} neue Karten aufgenommen. Sie kommen zwischen die Karten, die du gerade lernst."));
   render();
 }
 
@@ -1645,9 +1699,9 @@ async function startStudy(id, extra = false) { await pullChanges({ quiet: true }
 async function startAll(extra = false) {
   await pullChanges({ quiet: true });
   const blocks = activeTopics().map(t => decksOfTopic(t.id)).concat([looseDecks()]).filter(b => b.length);
-  startSession(blocks.flat(), "Alles für heute", null, { extra, blocks });
+  startSession(blocks.flat(), T("Alles für heute"), null, { extra, blocks });
 }
-async function startLoose(extra = false) { await pullChanges({ quiet: true }); startSession(looseDecks(), "Ohne Thema", null, { extra }); }
+async function startLoose(extra = false) { await pullChanges({ quiet: true }); startSession(looseDecks(), T("Ohne Thema"), null, { extra }); }
 async function startTopic(id, extra = false) { await pullChanges({ quiet: true }); const t = topicById(id); if (t) startSession(decksOfTopic(id), t.name, id, { extra }); }
 // blocks: groups of decks studied one after another (one subject at a time), each mixed inside.
 function startSession(decks, title, topicId = null, { extra = false, blocks = null } = {}) {
@@ -1662,7 +1716,7 @@ function startSession(decks, title, topicId = null, { extra = false, blocks = nu
   };
   const main = (blocks || [decks]).flatMap(blockMain);
   const learn = [...qmap.values()].flatMap(q => q.learn).sort((a, b) => ust(a).due - ust(b).due);
-  if (!main.length && !learn.length && !(extra && extraOffer(decks)?.ok)) { toast(blocks ? "Heute ist nichts mehr fällig." : decks.length > 1 ? "In diesem Thema ist heute nichts mehr fällig." : "In diesem Stapel ist heute nichts mehr fällig."); return; }
+  if (!main.length && !learn.length && !(extra && extraOffer(decks)?.ok)) { toast(blocks ? T("Heute ist nichts mehr fällig.") : decks.length > 1 ? T("In diesem Thema ist heute nichts mehr fällig.") : T("In diesem Stapel ist heute nichts mehr fällig.")); return; }
   state.session = { deckIds: decks.map(d => d.id), title, topicId, main, learn, current: null, revealed: false, done: 0, first: new Map(), history: [], lastKey: null, started: Date.now(), finished: false, startFach: new Map(), lastMove: null, badges: [] };
   state.view = "study"; state.open = null;
   if (!main.length && !learn.length) state.session.main.push(...pickExtra(decks, extraOffer(decks).n));
@@ -1736,12 +1790,12 @@ function undo() {
 // What the last rating did to the card, in words: shown as a stamp above the next card.
 function stampFor(prev, next, from, to, now) {
   const when = fmtDur(next.due - now);
-  const day = new Date(next.due).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
-  if (prev && prev.q === 2 && next.q === 3) return { kind: "again", title: "Vergessen", text: `kommt in ${when} nochmal` };
-  if (next.q !== 2) return { kind: "learn", title: !prev ? "Kennengelernt" : "Noch üben", text: `nochmal in ${when}${!prev ? ", danach gilt sie als gelernt" : ""}` };
-  if (!prev || prev.q !== 2) return { kind: "up", title: "Gelernt ✓", text: `wieder in ${when} (${day})` };
-  if (to > from) return { kind: "up", title: `${FAECHER[to].name} ↑`, text: `sitzt jetzt etwa ${fmtDur(next.s * DAY)}, wieder am ${day}` };
-  return { kind: "ok", title: "Sitzt", text: `wieder in ${when} (${day})` };
+  const day = new Date(next.due).toLocaleDateString(LOCALE(), { weekday: "short", day: "numeric", month: "short" });
+  if (prev && prev.q === 2 && next.q === 3) return { kind: "again", title: T("Vergessen"), text: T("kommt in {when} nochmal", { when }) };
+  if (next.q !== 2) return { kind: "learn", title: !prev ? T("Kennengelernt") : T("Noch üben"), text: !prev ? T("nochmal in {when}, danach gilt sie als gelernt", { when }) : T("nochmal in {when}", { when }) };
+  if (!prev || prev.q !== 2) return { kind: "up", title: T("Gelernt ✓"), text: T("wieder in {when} ({day})", { when, day }) };
+  if (to > from) return { kind: "up", title: `${T(FAECHER[to].name)} ↑`, text: T("sitzt jetzt etwa {dur}, wieder am {day}", { dur: fmtDur(next.s * DAY), day }) };
+  return { kind: "ok", title: T("Sitzt"), text: T("wieder in {when} ({day})", { when, day }) };
 }
 // Takes the current card out of the round (and out of future rounds) without rating it.
 function suspendCurrent() {
@@ -1749,7 +1803,7 @@ function suspendCurrent() {
   setSuspended(u.deck, u.card, true);
   s.main = s.main.filter(x => x.card !== u.card); s.learn = s.learn.filter(x => x.card !== u.card);
   s.editing = false;
-  toast("Karte ausgesetzt. Unter „Karten“ im Stapel kannst du sie bearbeiten und wieder aufnehmen.");
+  toast(T("Karte ausgesetzt. Unter „Karten“ im Stapel kannst du sie bearbeiten und wieder aufnehmen."));
   advance(); render();
 }
 function exitStudy() { flush(); state.session = null; state.view = "home"; render(); }
@@ -1799,16 +1853,16 @@ const HEADER_WORDS = /^(vorderseite|rückseite|rueckseite|front|back|frage|antwo
 async function openImport(file, targetId = null) {
   if (!file) return;
   let text;
-  try { text = await readFileText(file); } catch { toast("Die Datei konnte nicht gelesen werden."); return; }
+  try { text = await readFileText(file); } catch { toast(T("Die Datei konnte nicht gelesen werden.")); return; }
   openImportText(text, file.name, targetId);
 }
 function openImportText(raw, fileName, targetId = null) {
   const text = raw.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   const [delim, delimName] = detectDelim(text);
   const rows = parseCSV(text, delim);
-  if (!rows.length) { toast("Da ist nichts drin, das ich als Karten lesen kann."); return; }
+  if (!rows.length) { toast(T("Da ist nichts drin, das ich als Karten lesen kann.")); return; }
   const header = rows[0].slice(0, 2).some(c => HEADER_WORDS.test(c.trim()));
-  state.draft = { fileName, name: fileName === "Eingefügter Text" ? "Neuer Stapel" : fileName.replace(/\.(csv|tsv|txt)$/i, ""), rows, delimName, header, fc: 0, bc: 1, targetId };
+  state.draft = { fileName, name: fileName === T("Eingefügter Text") ? T("Neuer Stapel") : fileName.replace(/\.(csv|tsv|txt)$/i, ""), rows, delimName, header, fc: 0, bc: 1, targetId };
   state.view = "home"; state.pasteOpen = false; render();
   $("#imp-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -1829,20 +1883,22 @@ function doImport() {
       else { const c = { i: rid(), f, b, sf: null, sr: null, c: 0 }; cards.push(c); byFront.set(f, c); added++; }
     }
     assignChunks(deck);
-    toast(added + " neue Karten, " + updated + " aktualisiert. Dein Lernstand bleibt erhalten.");
+    toast(T("{a} neue Karten, {u} aktualisiert. Dein Lernstand bleibt erhalten.", { a: added, u: updated }));
   } else {
-    const deck = { id: rid(), name: (d.name || "Neuer Stapel").trim().slice(0, 120), created: Date.now(), dir: "f", mode: "auto", topic: topicById(d.topic ?? state.lastTopic) ? (d.topic ?? state.lastTopic) : null, newPerDay: 20, retention: 0.9, newDay: "", newCount: 0, revDay: "", revCount: 0, chunks: 0, cardCount: 0 };
+    const deck = { id: rid(), name: (d.name || T("Neuer Stapel")).trim().slice(0, 120), created: Date.now(), dir: "f", mode: "auto", topic: topicById(d.topic ?? state.lastTopic) ? (d.topic ?? state.lastTopic) : null, newPerDay: 20, retention: 0.9, newDay: "", newCount: 0, revDay: "", revCount: 0, chunks: 0, cardCount: 0 };
     state.decks.unshift(deck);
     state.cards[deck.id] = pairs.map(([f, b]) => ({ i: rid(), f, b, sf: null, sr: null, c: 0 }));
     assignChunks(deck);
-    toast(pairs.length + " Karten importiert.");
+    toast(Tn(pairs.length, "{n} Karte importiert.", "{n} Karten importiert."));
   }
   state.draft = null; render(); flush();
 }
 function loadSample() {
-  const text = "Land;Hauptstadt\nFrankreich;Paris\nSpanien;Madrid\nPortugal;Lissabon\nItalien;Rom\nPolen;Warschau\nTschechien;Prag\nUngarn;Budapest\nRumänien;Bukarest\nBulgarien;Sofia\nGriechenland;Athen\nSchweden;Stockholm\nNorwegen;Oslo\nFinnland;Helsinki\nDänemark;Kopenhagen\nIrland;Dublin\nLitauen;Vilnius\nLettland;Riga\nEstland;Tallinn\nSlowenien;Ljubljana\nKroatien;Zagreb";
+  const text = LANG === "en"
+    ? "Country;Capital\nFrance;Paris\nSpain;Madrid\nPortugal;Lisbon\nItaly;Rome\nPoland;Warsaw\nCzechia;Prague\nHungary;Budapest\nRomania;Bucharest\nBulgaria;Sofia\nGreece;Athens\nSweden;Stockholm\nNorway;Oslo\nFinland;Helsinki\nDenmark;Copenhagen\nIreland;Dublin\nLithuania;Vilnius\nLatvia;Riga\nEstonia;Tallinn\nSlovenia;Ljubljana\nCroatia;Zagreb"
+    : "Land;Hauptstadt\nFrankreich;Paris\nSpanien;Madrid\nPortugal;Lissabon\nItalien;Rom\nPolen;Warschau\nTschechien;Prag\nUngarn;Budapest\nRumänien;Bukarest\nBulgarien;Sofia\nGriechenland;Athen\nSchweden;Stockholm\nNorwegen;Oslo\nFinnland;Helsinki\nDänemark;Kopenhagen\nIrland;Dublin\nLitauen;Vilnius\nLettland;Riga\nEstland;Tallinn\nSlowenien;Ljubljana\nKroatien;Zagreb";
   const rows = parseCSV(text, ";");
-  state.draft = { fileName: "Beispiel", name: "Beispiel: Hauptstädte Europas", rows, delimName: "Semikolon", header: true, fc: 0, bc: 1, targetId: null };
+  state.draft = { fileName: T("Beispiel"), name: T("Beispiel: Hauptstädte Europas"), rows, delimName: "Semikolon", header: true, fc: 0, bc: 1, targetId: null };
   doImport();
 }
 
@@ -1872,8 +1928,8 @@ function deckStats(deck) {
 /* ---------- Rendering ---------- */
 function storageLabel() {
   const k = state.store?.kind;
-  const base = k === "server" ? "Gespeichert auf diesem Computer" : k === "local" ? "Server nicht gefunden, nur in diesem Browser gespeichert" : "Wird nicht gespeichert (Browser blockiert Speicher)";
-  const st = state.save === "saving" || state.save === "pending" ? "speichert …" : state.save === "error" ? "Speichern fehlgeschlagen" : "aktuell";
+  const base = k === "server" ? T("Gespeichert auf diesem Computer") : k === "local" ? T("Server nicht gefunden, nur in diesem Browser gespeichert") : T("Wird nicht gespeichert (Browser blockiert Speicher)");
+  const st = state.save === "saving" || state.save === "pending" ? T("speichert …") : state.save === "error" ? T("Speichern fehlgeschlagen") : T("aktuell");
   const cls = state.save === "error" ? "err" : (k === "server" ? "" : "warn");
   return `<span class="dot ${cls}"></span><span id="save-label">${esc(base)} · ${st}</span>`;
 }
@@ -1904,14 +1960,17 @@ function homeHTML() {
   <header class="top">
     <div>
       <h1>Karteikasten</h1>
-      <p class="lede">Lade eine CSV-Datei hoch und lerne täglich ein paar Minuten. Die App zeigt dir jede Karte kurz bevor du sie vergessen würdest.</p>
+      <p class="lede">${T("Lade eine CSV-Datei hoch und lerne täglich ein paar Minuten. Die App zeigt dir jede Karte kurz bevor du sie vergessen würdest.")}</p>
     </div>
     <div class="top-right">
-      <span class="date-field">Datum: <b>${new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" })}</b></span>
+      <div class="top-line">
+        <span class="date-field">${T("Datum:")} <b>${new Date().toLocaleDateString(LOCALE(), { day: "numeric", month: "long", year: "numeric" })}</b></span>
+        <button class="btn ghost gear" data-act="ui-settings" aria-pressed="${!!state.uiOpen}" aria-label="${T("Einstellungen")}" title="${T("Einstellungen")}">⚙︎</button>
+      </div>
       <div class="storage" id="storage">${storageLabel()}</div>
     </div>
-  </header>`;
-  if (state.loading) return head + `<p class="loading">Lade deine Stapel …</p>`;
+  </header>${state.uiOpen ? uiSettingsHTML() : ""}`;
+  if (state.loading) return head + `<p class="loading">${T("Lade deine Stapel …")}</p>`;
   if (state.loadError) return head + `<div class="panel"><p class="error">${esc(state.loadError)}</p></div>`;
   const importArea = state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML();
   if (!state.topics.length) return head + todayHTML() + importArea + decksHTML() + badgesHTML() + backupHTML() + howHTML();
@@ -1920,30 +1979,52 @@ function homeHTML() {
   // On a subject page the import area sits below the sets, unless an import is under way.
   const busy = !!(state.draft || state.pasteOpen), top = busy ? importArea : "", bottom = busy ? "" : importArea;
   const body = tab === "today" ? todayHTML() + overviewHTML() + importArea + badgesHTML() + backupHTML() + howHTML()
-    : tab === "loose" ? top + `<section class="subject-page" aria-label="Ohne Thema"><div class="topic loose"><div class="topic-head"><h3 class="topic-name">Ohne Thema</h3>${studyButtonHTML(looseDecks(), 'data-act="study-loose"', "Lernen")}</div><ul class="decks">${looseDecks().map(deckHTML).join("")}</ul></div></section>` + bottom
-    : tab === "archive" ? `<section class="subject-page" aria-label="Archiv"><p class="muted small">Themen im Archiv ruhen: Sie zählen nicht zu „heute“ und nicht zu „Alles lernen“. Ihr Lernstand bleibt erhalten, und du kannst sie jederzeit auffrischen oder zurückholen.</p>${archivedTopics().map(topicHTML).join("")}</section>`
+    : tab === "loose" ? top + `<section class="subject-page" aria-label="${T("Ohne Thema")}"><div class="topic loose"><div class="topic-head"><h3 class="topic-name">${T("Ohne Thema")}</h3>${studyButtonHTML(looseDecks(), 'data-act="study-loose"', T("Lernen"))}</div><ul class="decks">${looseDecks().map(deckHTML).join("")}</ul></div></section>` + bottom
+    : tab === "archive" ? `<section class="subject-page" aria-label="${T("Archiv")}"><p class="muted small">${T("Themen im Archiv ruhen: Sie zählen nicht zu „heute“ und nicht zu „Alles lernen“. Ihr Lernstand bleibt erhalten, und du kannst sie jederzeit auffrischen oder zurückholen.")}</p>${archivedTopics().map(topicHTML).join("")}</section>`
     : top + `<section class="subject-page" aria-label="${esc(topicById(tab).name)}">${topicHTML(topicById(tab))}</section>` + bottom;
   return head + tabsHTML(tab) + (creating ? topicEditHTML() : "") + body;
 }
 
+// The gear: settings for the whole app on this device.
+function uiSettingsHTML() {
+  const seg = (name, value, label, on) => `<label><input type="radio" name="${name}" value="${value}" ${on ? "checked" : ""}><span>${label}</span></label>`;
+  return `
+  <section class="panel ui-settings" aria-labelledby="ui-h">
+    <div class="sec-head"><h2 id="ui-h">${T("Einstellungen")}</h2><button class="btn ghost sm" data-act="ui-settings">${T("Schließen")}</button></div>
+    <fieldset class="seg"><legend>${T("Darstellung")}</legend>
+      ${seg("ui-theme", "system", T("Wie das System"), THEME === "system")}${seg("ui-theme", "light", T("Hell"), THEME === "light")}${seg("ui-theme", "dark", T("Dunkel"), THEME === "dark")}
+    </fieldset>
+    <fieldset class="seg"><legend>${LANG === "en" ? "Language · Sprache" : "Sprache · Language"}</legend>
+      ${Object.entries(LANGS).map(([k, name]) => seg("ui-lang", k, name, LANG === k)).join("")}
+    </fieldset>
+    <p class="muted small">${T("Gilt für dieses Gerät. Deine Karten bleiben, wie sie sind, nur die Oberfläche wechselt die Sprache.")}</p>
+  </section>`;
+}
+
+// "3 fällig · 5 neu · 2 Sets · 40 Karten". Without sets when sets is null.
+function countsLine(due, fresh, sets, cards) {
+  return [due ? `<span class="c-rev">${T("{n} fällig", { n: due })}</span>` : T("{n} fällig", { n: 0 }),
+    fresh ? `<span class="c-new">${T("{n} neu", { n: fresh })}</span>` : T("{n} neu", { n: 0 }),
+    sets == null ? "" : Tn(sets, "{n} Set", "{n} Sets"), Tn(cards, "{n} Karte", "{n} Karten")].filter(Boolean).join(" · ");
+}
 function tabsHTML(tab) {
   const chip = (id, label, extra = "", style = "") => `<button class="subject-tab" data-act="home" data-id="${id}" aria-pressed="${tab === id}" ${style ? `style="${style}"` : ""}>${label}${extra}</button>`;
   const dueOf = decks => decks.reduce((a, d) => { const q = buildQueue(d); return a + q.nRev + q.nLearn; }, 0);
   const badge = n => n ? `<span class="tab-count">${n}</span>` : "";
-  return `<nav class="subject-tabs" aria-label="Themen">
-    ${chip("today", "Heute")}
+  return `<nav class="subject-tabs" aria-label="${T("Themen")}">
+    ${chip("today", T("Heute"))}
     ${activeTopics().map(t => chip(t.id, `<i class="dot" aria-hidden="true"></i>${esc(t.name)}`, badge(dueOf(decksOfTopic(t.id))), `--fc:${topicColor(t)}`)).join("")}
-    ${looseDecks().length ? chip("loose", "Ohne Thema", badge(dueOf(looseDecks()))) : ""}
-    ${archivedTopics().length ? chip("archive", "Archiv", `<span class="tab-count muted-count">${archivedTopics().length}</span>`) : ""}
-    <button class="subject-tab add" data-act="topic-new" aria-pressed="${!!(state.topicEdit && !state.topicEdit.id)}">+ Neues Thema</button>
+    ${looseDecks().length ? chip("loose", T("Ohne Thema"), badge(dueOf(looseDecks()))) : ""}
+    ${archivedTopics().length ? chip("archive", T("Archiv"), `<span class="tab-count muted-count">${archivedTopics().length}</span>`) : ""}
+    <button class="subject-tab add" data-act="topic-new" aria-pressed="${!!(state.topicEdit && !state.topicEdit.id)}">+ ${T("Neues Thema")}</button>
   </nav>`;
 }
 // The learn button of a deck group: "Lernen", or more new cards, or done for today.
 function studyButtonHTML(decks, attrs, label) {
   const qs = decks.map(buildQueue), nothing = !qs.some(q => q.nRev + q.nLearn + q.nNew);
   const off = nothing ? extraOffer(decks) : null;
-  return off?.ok ? `<button class="btn ghost" ${attrs} data-extra="1" title="Die heutigen neuen Karten sitzen schon gut">${off.n} weitere neue</button>`
-    : `<button class="btn ${nothing ? "ghost" : "primary"}" ${attrs} ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : label}</button>`;
+  return off?.ok ? `<button class="btn ghost" ${attrs} data-extra="1" title="${T("Die heutigen neuen Karten sitzen schon gut")}">${T("{n} weitere neue", { n: off.n })}</button>`
+    : `<button class="btn ${nothing ? "ghost" : "primary"}" ${attrs} ${nothing ? "disabled" : ""}>${nothing ? T("Für heute fertig") : label}</button>`;
 }
 // "Today": one button for everything, then one compact row per subject.
 function overviewHTML() {
@@ -1957,25 +2038,25 @@ function overviewHTML() {
     return `<li class="subject-row" style="--fc:${t ? topicColor(t) : "var(--line)"}">
       <span class="subject-bar" aria-hidden="true"></span>
       <div class="subject-main">
-        <button class="subject-link" data-act="home" data-id="${t ? t.id : "loose"}">${esc(t ? t.name : "Ohne Thema")}</button>
-        <p class="counts">${d ? `<span class="c-rev">${d} fällig</span>` : "0 fällig"} · ${n ? `<span class="c-new">${n} neu</span>` : "0 neu"} · ${decks.length} ${decks.length === 1 ? "Set" : "Sets"} · ${cards} Karten</p>
-        <div class="subject-progress" title="${p.pct} % Fortschritt"><i style="width:${p.pct}%"></i></div>
+        <button class="subject-link" data-act="home" data-id="${t ? t.id : "loose"}">${esc(t ? t.name : T("Ohne Thema"))}</button>
+        <p class="counts">${countsLine(d, n, decks.length, cards)}</p>
+        <div class="subject-progress" title="${T("{p} Fortschritt", { p: pctN(p.pct) })}"><i style="width:${p.pct}%"></i></div>
       </div>
-      ${studyButtonHTML(decks, t ? `data-act="study-topic" data-id="${t.id}"` : 'data-act="study-loose"', "Lernen")}
+      ${studyButtonHTML(decks, t ? `data-act="study-topic" data-id="${t.id}"` : 'data-act="study-loose"', T("Lernen"))}
     </li>`;
   };
   const arch = archivedTopics();
   return `<section class="overview" aria-labelledby="overview-h">
-    <h2 id="overview-h" class="sr">Deine Themen heute</h2>
+    <h2 id="overview-h" class="sr">${T("Deine Themen heute")}</h2>
     <div class="all-card">
-      <div><p class="all-title">${due + fresh ? `Heute: ${due + fresh} ${due + fresh === 1 ? "Karte" : "Karten"}, etwa ${mins} Min.` : "Für heute ist alles erledigt."}</p>
-        <p class="muted small">${due + fresh ? `${due} fällig, ${fresh} neu. Thema für Thema, damit du nicht ständig umdenken musst.` : "Morgen geht es weiter. Im Archiv kannst du alte Themen auffrischen."}</p></div>
-      ${due + fresh ? `<button class="btn primary" data-act="study-all">Alles lernen</button>` : ""}
+      <div><p class="all-title">${due + fresh ? Tn(due + fresh, "Heute: {n} Karte, etwa {m} Min.", "Heute: {n} Karten, etwa {m} Min.", { m: mins }) : T("Für heute ist alles erledigt.")}</p>
+        <p class="muted small">${due + fresh ? T("{d} fällig, {f} neu. Thema für Thema, damit du nicht ständig umdenken musst.", { d: due, f: fresh }) : T("Morgen geht es weiter. Im Archiv kannst du alte Themen auffrischen.")}</p></div>
+      ${due + fresh ? `<button class="btn primary" data-act="study-all">${T("Alles lernen")}</button>` : ""}
     </div>
     <ul class="subject-rows">${groups.map(row).join("")}
       ${arch.length ? `<li class="subject-row archived" style="--fc:var(--line)"><span class="subject-bar" aria-hidden="true"></span>
-        <div class="subject-main"><button class="subject-link" data-act="home" data-id="archive">Archiv</button><p class="counts">${arch.map(t => esc(t.name)).join(", ")} · ruht, zählt nicht zu „heute“</p></div>
-        <button class="btn ghost" data-act="home" data-id="archive">Ansehen</button></li>` : ""}
+        <div class="subject-main"><button class="subject-link" data-act="home" data-id="archive">${T("Archiv")}</button><p class="counts">${arch.map(t => esc(t.name)).join(", ")} · ${T("ruht, zählt nicht zu „heute“")}</p></div>
+        <button class="btn ghost" data-act="home" data-id="archive">${T("Ansehen")}</button></li>` : ""}
     </ul>
   </section>`;
 }
@@ -1984,12 +2065,12 @@ function dropHTML() {
   return `
   <div class="drop" id="drop">
     <div class="txt">
-      <strong>CSV-Datei hierher ziehen oder Tabelle einfügen</strong>
-      <span class="muted small">Spalte 1 = Vorderseite, Spalte 2 = Rückseite. Komma, Semikolon und Tab werden erkannt. Mit *Sternchen* markierst du Schlüsselbegriffe in langen Antworten. Du kannst auch Zeilen aus Excel, Google Sheets, Notion oder Quizlet kopieren und hier einfügen.</span>
+      <strong>${T("CSV-Datei hierher ziehen oder Tabelle einfügen")}</strong>
+      <span class="muted small">${T("Spalte 1 = Vorderseite, Spalte 2 = Rückseite. Komma, Semikolon und Tab werden erkannt. Mit *Sternchen* markierst du Schlüsselbegriffe in langen Antworten. Du kannst auch Zeilen aus Excel, Google Sheets, Notion oder Quizlet kopieren und hier einfügen.")}</span>
     </div>
     <div class="btns">
-      <label class="btn primary" for="file-new">Datei auswählen</label>
-      <button class="btn ghost" data-act="paste-open">Text einfügen</button>
+      <label class="btn primary" for="file-new">${T("Datei auswählen")}</label>
+      <button class="btn ghost" data-act="paste-open">${T("Text einfügen")}</button>
     </div>
     <input class="sr" type="file" id="file-new" accept=".csv,.tsv,.txt,text/csv,text/plain">
   </div>`;
@@ -1999,14 +2080,14 @@ function pasteHTML() {
   return `
   <section class="panel" aria-labelledby="paste-h">
     <div>
-      <p class="eyebrow">Neuer Stapel</p>
-      <h2 id="paste-h">Text einfügen</h2>
-      <p class="muted small" style="margin-top:4px">Eine Karte pro Zeile. Vorder- und Rückseite durch Tab, Semikolon oder Komma trennen. Aus Tabellen kopierte Zeilen passen direkt.</p>
+      <p class="eyebrow">${T("Neuer Stapel")}</p>
+      <h2 id="paste-h">${T("Text einfügen")}</h2>
+      <p class="muted small" style="margin-top:4px">${T("Eine Karte pro Zeile. Vorder- und Rückseite durch Tab, Semikolon oder Komma trennen. Aus Tabellen kopierte Zeilen passen direkt.")}</p>
     </div>
-    <textarea id="paste-text" placeholder="der Apfel;la manzana&#10;das Haus;la casa&#10;der Hund;el perro" data-autofocus></textarea>
+    <textarea id="paste-text" placeholder="${T("der Apfel;la manzana&#10;das Haus;la casa&#10;der Hund;el perro")}" data-autofocus></textarea>
     <div class="row-actions">
-      <button class="btn primary" data-act="paste-go">Weiter zur Vorschau</button>
-      <button class="btn ghost" data-act="paste-cancel">Abbrechen</button>
+      <button class="btn primary" data-act="paste-go">${T("Weiter zur Vorschau")}</button>
+      <button class="btn ghost" data-act="paste-cancel">${T("Abbrechen")}</button>
     </div>
   </section>`;
 }
@@ -2014,30 +2095,30 @@ function pasteHTML() {
 function todayHTML() {
   if (!state.decks.length) return "";
   const { n, todayOk, today } = streakInfo(), goal = state.profile.goal;
-  const wd = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  const wd = weekdays();
   const week = Array.from({ length: 7 }, (_, k) => {
     const i = k - 6, d = dayShift(i), on = (state.profile.days[dayKey(d.getTime())] || 0) >= goal;
-    return `<span><i class="${on ? "on" : ""} ${i === 0 && !on ? "now" : ""}"></i>${i === 0 ? "heute" : wd[d.getDay()]}</span>`;
+    return `<span><i class="${on ? "on" : ""} ${i === 0 && !on ? "now" : ""}"></i>${i === 0 ? T("heute") : wd[d.getDay()]}</span>`;
   }).join("");
   const goals = [10, 20, 30, 50, 100, 200];
   return `
-  <section class="today" aria-label="Heute">
+  <section class="today" aria-label="${T("Heute")}">
     <div class="goal">
-      <div class="goal-line"><span class="num" style="color:var(--ink)">${today}<span class="muted" style="font-size:16px;font-weight:500"> / ${goal}</span></span><span>Antworten heute</span></div>
+      <div class="goal-line"><span class="num" style="color:var(--ink)">${today}<span class="muted" style="font-size:16px;font-weight:500"> / ${goal}</span></span><span>${T("Antworten heute")}</span></div>
       <div class="goalbar" aria-hidden="true"><i style="width:${Math.min(100, today / goal * 100)}%"></i></div>
-      <label class="goal-line" for="goal-sel">Tagesziel
-        <select id="goal-sel">${goals.map(x => `<option value="${x}" ${x === goal ? "selected" : ""}>${x} Antworten</option>`).join("")}</select>
+      <label class="goal-line" for="goal-sel">${T("Tagesziel")}
+        <select id="goal-sel">${goals.map(x => `<option value="${x}" ${x === goal ? "selected" : ""}>${T("{n} Antworten", { n: x })}</option>`).join("")}</select>
       </label>
     </div>
     <div class="streak">
-      <span class="num" style="color:var(--ink)">${n} ${n === 1 ? "Tag" : "Tage"}</span>
-      <span>${n === 0 ? "Erreiche heute dein Ziel, um eine Serie zu starten." : todayOk ? "Serie, heute geschafft." : "Serie. Heute noch " + (goal - today) + " Antworten, dann hält sie."}</span>
+      <span class="num" style="color:var(--ink)">${Tn(n, "{n} Tag", "{n} Tage")}</span>
+      <span>${n === 0 ? T("Erreiche heute dein Ziel, um eine Serie zu starten.") : todayOk ? T("Serie, heute geschafft.") : Tn(goal - today, "Serie. Heute noch {n} Antwort, dann hält sie.", "Serie. Heute noch {n} Antworten, dann hält sie.")}</span>
     </div>
-    <div class="week" aria-label="Tagesziel der letzten 7 Tage">${week}</div>
+    <div class="week" aria-label="${T("Tagesziel der letzten 7 Tage")}">${week}</div>
     ${(() => {
       const dl = state.profile.daily[dayKey()] || {}, startedToday = state.decks.reduce((a, d) => a + (d.newDay === dayKey() ? Math.max(0, d.newCount || 0) : 0), 0);
-      const parts = [startedToday && `<b>${startedToday}</b> neue Karten angefangen`, dl.learned && `<b>${dl.learned}</b> gelernt`, dl.up && `<b>${dl.up}</b> eine Stufe weiter`].filter(Boolean);
-      return today ? `<p class="day-sum">Heute: ${parts.length ? parts.join(" · ") : `${today} Antworten`}.</p>` : "";
+      const parts = [startedToday && T("<b>{n}</b> neue Karten angefangen", { n: startedToday }), dl.learned && T("<b>{n}</b> gelernt", { n: dl.learned }), dl.up && T("<b>{n}</b> eine Stufe weiter", { n: dl.up })].filter(Boolean);
+      return today ? `<p class="day-sum">${T("Heute: {list}.", { list: parts.length ? parts.join(" · ") : Tn(today, "{n} Antwort", "{n} Antworten") })}</p>` : "";
     })()}
   </section>`;
 }
@@ -2046,37 +2127,37 @@ function importHTML() {
   const d = state.draft;
   const width = Math.max(...d.rows.slice(0, 50).map(r => r.length));
   const target = d.targetId ? deckById(d.targetId) : null;
-  const colName = i => d.header && d.rows[0][i]?.trim() ? d.rows[0][i].trim() : "Spalte " + (i + 1);
+  const colName = i => d.header && d.rows[0][i]?.trim() ? d.rows[0][i].trim() : T("Spalte {n}", { n: i + 1 });
   const opts = sel => Array.from({ length: width }, (_, i) => `<option value="${i}" ${i === sel ? "selected" : ""}>${esc(colName(i))}</option>`).join("");
   const pairs = width >= 2 ? draftPairs(d) : [];
   const body = (d.header ? d.rows.slice(1) : d.rows).slice(0, 5);
   const table = width >= 2 ? `
     <div class="table-wrap"><table>
-      <thead><tr>${Array.from({ length: Math.min(width, 6) }, (_, i) => `<th>${esc(colName(i))}${i === d.fc ? " · vorne" : i === d.bc ? " · hinten" : ""}</th>`).join("")}</tr></thead>
+      <thead><tr>${Array.from({ length: Math.min(width, 6) }, (_, i) => `<th>${esc(colName(i))}${i === d.fc ? " · " + T("vorne") : i === d.bc ? " · " + T("hinten") : ""}</th>`).join("")}</tr></thead>
       <tbody>${body.map(r => `<tr>${Array.from({ length: Math.min(width, 6) }, (_, i) => `<td class="${i === d.fc || i === d.bc ? "" : "off"}">${esc((r[i] || "").slice(0, 140))}</td>`).join("")}</tr>`).join("")}</tbody>
     </table></div>` : "";
   return `
   <section class="panel" id="imp-panel" aria-labelledby="imp-h">
     <div>
-      <p class="eyebrow">${target ? "Stapel ergänzen" : "Neuer Stapel"}</p>
+      <p class="eyebrow">${target ? T("Stapel ergänzen") : T("Neuer Stapel")}</p>
       <h2 id="imp-h">${esc(d.fileName)}</h2>
-      <p class="muted small" style="margin-top:4px">${d.rows.length} Zeilen erkannt, Trennzeichen: ${esc(d.delimName)}.${target ? ` Karten mit gleicher Vorderseite werden aktualisiert, dein Lernstand bleibt.` : ""}</p>
+      <p class="muted small" style="margin-top:4px">${T("{n} Zeilen erkannt, Trennzeichen: {d}.", { n: d.rows.length, d: esc(T(d.delimName)) })}${target ? " " + T("Karten mit gleicher Vorderseite werden aktualisiert, dein Lernstand bleibt.") : ""}</p>
     </div>
-    ${width < 2 ? `<p class="error">Die Datei hat nur eine Spalte. Jede Zeile braucht Vorderseite und Rückseite, getrennt durch Komma, Semikolon oder Tab.</p>` : `
+    ${width < 2 ? `<p class="error">${T("Die Datei hat nur eine Spalte. Jede Zeile braucht Vorderseite und Rückseite, getrennt durch Komma, Semikolon oder Tab.")}</p>` : `
     <div class="form-grid">
-      ${target ? `<label class="field">Ziel<input type="text" id="imp-target" value="${esc(target.name)}" disabled></label>` : `<label class="field">Name des Stapels<input type="text" id="imp-name" value="${esc(d.name)}" maxlength="120"></label>`}
-      ${!target && state.topics.length ? `<label class="field">Thema<select id="imp-topic">
-        <option value="">Ohne Thema</option>${state.topics.map(t => `<option value="${t.id}" ${(d.topic ?? state.lastTopic) === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+      ${target ? `<label class="field">${T("Ziel")}<input type="text" id="imp-target" value="${esc(target.name)}" disabled></label>` : `<label class="field">${T("Name des Stapels")}<input type="text" id="imp-name" value="${esc(d.name)}" maxlength="120"></label>`}
+      ${!target && state.topics.length ? `<label class="field">${T("Thema")}<select id="imp-topic">
+        <option value="">${T("Ohne Thema")}</option>${state.topics.map(t => `<option value="${t.id}" ${(d.topic ?? state.lastTopic) === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
       </select></label>` : ""}
-      <label class="field">Vorderseite (Frage)<select id="imp-f">${opts(d.fc)}</select></label>
-      <label class="field">Rückseite (Antwort)<select id="imp-b">${opts(d.bc)}</select></label>
+      <label class="field">${T("Vorderseite (Frage)")}<select id="imp-f">${opts(d.fc)}</select></label>
+      <label class="field">${T("Rückseite (Antwort)")}<select id="imp-b">${opts(d.bc)}</select></label>
     </div>
-    <label class="check"><input type="checkbox" id="imp-head" ${d.header ? "checked" : ""}> Erste Zeile ist eine Überschrift</label>
+    <label class="check"><input type="checkbox" id="imp-head" ${d.header ? "checked" : ""}> ${T("Erste Zeile ist eine Überschrift")}</label>
     ${table}`}
     <div class="row-actions">
-      <button class="btn primary" data-act="imp-go" ${pairs.length ? "" : "disabled"}>${pairs.length} ${pairs.length === 1 ? "Karte" : "Karten"} ${target ? "übernehmen" : "importieren"}</button>
-      <button class="btn ghost" data-act="imp-cancel">Abbrechen</button>
-      ${pairs.length && d.fc === d.bc ? `<span class="error small">Vorder- und Rückseite sind dieselbe Spalte.</span>` : ""}
+      <button class="btn primary" data-act="imp-go" ${pairs.length ? "" : "disabled"}>${target ? Tn(pairs.length, "{n} Karte übernehmen", "{n} Karten übernehmen") : Tn(pairs.length, "{n} Karte importieren", "{n} Karten importieren")}</button>
+      <button class="btn ghost" data-act="imp-cancel">${T("Abbrechen")}</button>
+      ${pairs.length && d.fc === d.bc ? `<span class="error small">${T("Vorder- und Rückseite sind dieselbe Spalte.")}</span>` : ""}
     </div>
   </section>`;
 }
@@ -2085,14 +2166,14 @@ function decksHTML() {
   if (!state.decks.length) {
     return `
     <section aria-labelledby="decks-h">
-      <h2 id="decks-h">Deine Stapel</h2>
+      <h2 id="decks-h">${T("Deine Stapel")}</h2>
       <div class="panel">
-        <p>Noch keine Stapel. So sollte deine Datei aussehen:</p>
+        <p>${T("Noch keine Stapel. So sollte deine Datei aussehen:")}</p>
         <div class="table-wrap sample-table"><table>
-          <thead><tr><th>Spalte 1 · vorne</th><th>Spalte 2 · hinten</th></tr></thead>
-          <tbody><tr><td>der Apfel</td><td>la manzana</td></tr><tr><td>Was misst ein Barometer?</td><td>Den Luftdruck</td></tr><tr><td>Hauptstadt von Kanada</td><td>Ottawa</td></tr></tbody>
+          <thead><tr><th>${T("Spalte 1 · vorne")}</th><th>${T("Spalte 2 · hinten")}</th></tr></thead>
+          <tbody><tr><td>${T("der Apfel")}</td><td>la manzana</td></tr><tr><td>${T("Was misst ein Barometer?")}</td><td>${T("Den Luftdruck")}</td></tr><tr><td>${T("Hauptstadt von Kanada")}</td><td>Ottawa</td></tr></tbody>
         </table></div>
-        <div class="row-actions"><button class="btn ghost" data-act="sample">Beispielstapel ausprobieren</button><span class="muted small">20 Hauptstädte Europas, jederzeit löschbar.</span></div>
+        <div class="row-actions"><button class="btn ghost" data-act="sample">${T("Beispielstapel ausprobieren")}</button><span class="muted small">${T("20 Hauptstädte Europas, jederzeit löschbar.")}</span></div>
       </div>
     </section>`;
   }
@@ -2100,13 +2181,13 @@ function decksHTML() {
   const creating = state.topicEdit && !state.topicEdit.id;
   return `
   <section aria-labelledby="decks-h">
-    <div class="sec-head"><h2 id="decks-h">${topics.length ? "Deine Themen" : "Deine Stapel"}</h2>
-      <button class="btn ghost sm" data-act="topic-new" aria-pressed="${!!creating}">Neues Thema</button></div>
+    <div class="sec-head"><h2 id="decks-h">${topics.length ? T("Deine Themen") : T("Deine Stapel")}</h2>
+      <button class="btn ghost sm" data-act="topic-new" aria-pressed="${!!creating}">${T("Neues Thema")}</button></div>
     ${creating ? topicEditHTML() : ""}
-    ${!topics.length && !creating ? `<p class="muted small">Tipp: Bündle Kartensets zu einem Thema, z. B. alle Sets einer Vorlesung. Dann lernst du sie in einer Runde.</p>` : ""}
+    ${!topics.length && !creating ? `<p class="muted small">${T("Tipp: Bündle Kartensets zu einem Thema, z. B. alle Sets einer Vorlesung. Dann lernst du sie in einer Runde.")}</p>` : ""}
     ${topics.map(topicHTML).join("")}
     ${loose.length ? (topics.length
-      ? `<div class="topic loose"><div class="topic-head"><h3 class="topic-name">Ohne Thema</h3></div><ul class="decks">${loose.map(deckHTML).join("")}</ul></div>`
+      ? `<div class="topic loose"><div class="topic-head"><h3 class="topic-name">${T("Ohne Thema")}</h3></div><ul class="decks">${loose.map(deckHTML).join("")}</ul></div>`
       : `<ul class="decks">${loose.map(deckHTML).join("")}</ul>`) : ""}
   </section>`;
 }
@@ -2120,30 +2201,30 @@ function topicHTML(t) {
   <div class="topic ${t.archived ? "is-archived" : ""}" style="--fc:${topicColor(t)}">
     <div class="topic-head">
       <div class="deck-main">
-        <h3 class="topic-name">${esc(t.name)}${t.archived ? ` <span class="archived-tag">im Archiv</span>` : ""}</h3>
-        <p class="counts">${due ? `<span class="c-rev">${due} fällig</span>` : "0 fällig"} · ${fresh ? `<span class="c-new">${fresh} neu</span>` : "0 neu"} · ${decks.length} ${decks.length === 1 ? "Set" : "Sets"} · ${cards} Karten</p>
-        ${masteryBar(progressOf(decks), "Thema")}
+        <h3 class="topic-name">${esc(t.name)}${t.archived ? ` <span class="archived-tag">${T("im Archiv")}</span>` : ""}</h3>
+        <p class="counts">${countsLine(due, fresh, decks.length, cards)}</p>
+        ${masteryBar(progressOf(decks))}
       </div>
       <div class="deck-actions">
         ${(() => {
           const off = nothing ? extraOffer(decks) : null;
-          return off?.ok ? `<button class="btn ghost" data-act="study-topic" data-extra="1" data-id="${t.id}" title="Die heutigen neuen Karten sitzen schon gut">${off.n} weitere neue</button>`
-            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study-topic" data-id="${t.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : t.archived ? "Auffrischen" : "Thema lernen"}</button>`;
+          return off?.ok ? `<button class="btn ghost" data-act="study-topic" data-extra="1" data-id="${t.id}" title="${T("Die heutigen neuen Karten sitzen schon gut")}">${T("{n} weitere neue", { n: off.n })}</button>`
+            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study-topic" data-id="${t.id}" ${nothing ? "disabled" : ""}>${nothing ? T("Für heute fertig") : t.archived ? T("Auffrischen") : T("Thema lernen")}</button>`;
         })()}
-        <button class="btn ghost" data-act="topic-tree" data-id="${t.id}" aria-pressed="${state.treeOpen === t.id}">Themenbaum</button>
-        <button class="btn ghost" data-act="topic-edit" data-id="${t.id}" aria-pressed="${editing}">Bearbeiten</button>
-        <button class="btn ghost" data-act="topic-archive" data-id="${t.id}">${t.archived ? "Zurückholen" : "Archivieren"}</button>
+        <button class="btn ghost" data-act="topic-tree" data-id="${t.id}" aria-pressed="${state.treeOpen === t.id}">${T("Themenbaum")}</button>
+        <button class="btn ghost" data-act="topic-edit" data-id="${t.id}" aria-pressed="${editing}">${T("Bearbeiten")}</button>
+        <button class="btn ghost" data-act="topic-archive" data-id="${t.id}">${t.archived ? T("Zurückholen") : T("Archivieren")}</button>
       </div>
     </div>
     ${editing ? topicEditHTML() : ""}
     ${state.treeOpen === t.id && !editing ? treeHTML(t) : ""}
-    ${decks.length ? `<ul class="decks">${decks.map(deckHTML).join("")}</ul>` : `<p class="muted small">Noch keine Kartensets. Ordne sie unter „Bearbeiten“ zu.</p>`}
+    ${decks.length ? `<ul class="decks">${decks.map(deckHTML).join("")}</ul>` : `<p class="muted small">${T("Noch keine Kartensets. Ordne sie unter „Bearbeiten“ zu.")}</p>`}
   </div>`;
 }
 
 function treeHTML(t) {
   const tt = topicTree(t);
-  if (!tt.root) return `<div class="panel tree-panel"><p>Noch kein Themenbaum. Baue unter <b>„Bearbeiten“</b> eine Gliederung des Themas auf oder füge sie als Text ein, z. B. aus deinen Vorlesungsnotizen. Die Karten werden dann automatisch den Zweigen zugeordnet.</p></div>`;
+  if (!tt.root) return `<div class="panel tree-panel"><p>${T("Noch kein Themenbaum. Baue unter <b>„Bearbeiten“</b> eine Gliederung des Themas auf oder füge sie als Text ein, z. B. aus deinen Vorlesungsnotizen. Die Karten werden dann automatisch den Zweigen zugeordnet.")}</p></div>`;
   const stats = treeStats(tt), leaves = treeLeaves(tt.root), open = state.treeExpanded;
   // The weakest branch: lowest progress among branches with at least 2 cards.
   const weak = leaves.filter(l => stats.get(l.id).cards >= 2).sort((a, b) => stats.get(a.id).pct - stats.get(b.id).pct)[0];
@@ -2157,13 +2238,13 @@ function treeHTML(t) {
   const pinOf = c => t.pins?.[c.i];
   const cardRow = ({ c }) => {
     const a = tt.assign.get(c.i), pin = pinOf(c);
-    const opts = [`<option value="auto" ${!pin ? "selected" : ""}>Automatisch${a && !a.manual ? ` (${esc(short(label(a.node)))})` : ""}</option>`]
+    const opts = [`<option value="auto" ${!pin ? "selected" : ""}>${T("Automatisch")}${a && !a.manual ? ` (${esc(short(label(a.node)))})` : ""}</option>`]
       .concat(nodes.map(n => `<option value="${n.id}" ${pin === n.id ? "selected" : ""}>${"  ".repeat(n.depth - 1)}${esc(short(n.label))}</option>`))
-      .concat(`<option value="none" ${pin === "none" ? "selected" : ""}>Keinem Zweig zuordnen</option>`);
+      .concat(`<option value="none" ${pin === "none" ? "selected" : ""}>${T("Keinem Zweig zuordnen")}</option>`);
     return `<li class="cardrow">
       <span class="cr-text" title="${esc(plain(c.f))}">${esc(plain(c.f).slice(0, 130))}</span>
-      ${a?.manual || pin === "none" ? `<span class="cr-tag">von Hand</span>` : a?.unsure ? `<span class="cr-tag unsure">unsicher</span>` : ""}
-      <select class="reassign" data-tid="${t.id}" data-cid="${c.i}" aria-label="Zweig dieser Karte">${opts.join("")}</select>
+      ${a?.manual || pin === "none" ? `<span class="cr-tag">${T("von Hand")}</span>` : a?.unsure ? `<span class="cr-tag unsure">${T("unsicher")}</span>` : ""}
+      <select class="reassign" data-tid="${t.id}" data-cid="${c.i}" aria-label="${T("Zweig dieser Karte")}">${opts.join("")}</select>
     </li>`;
   };
   const byNode = new Map();
@@ -2172,9 +2253,9 @@ function treeHTML(t) {
     const st = stats.get(n.id), isWeak = weak && n === weak && st.pct < 60, own = byNode.get(n.id) || [], isOpen = open.has(n.id);
     return `<li><div class="node ${isWeak ? "weak" : ""}">
       <span class="node-label">${esc(n.label)}</span>
-      <span class="node-meta">${st.cards ? `${st.cards} ${st.cards === 1 ? "Karte" : "Karten"}${st.due ? ` · <span class="c-rev">${st.due} fällig</span>` : ""} · ${st.pct} %` : "noch keine Karten"}${isWeak ? " · schwächster Zweig" : ""}</span>
+      <span class="node-meta">${st.cards ? `${Tn(st.cards, "{n} Karte", "{n} Karten")}${st.due ? ` · <span class="c-rev">${T("{n} fällig", { n: st.due })}</span>` : ""} · ${pctN(st.pct)}` : T("noch keine Karten")}${isWeak ? " · " + T("schwächster Zweig") : ""}</span>
       ${st.units ? `<div class="segbar" aria-hidden="true">${st.counts.map((v, i) => v ? `<i class="f${i}" style="width:${v / st.units * 100}%"></i>` : "").join("")}</div>` : ""}
-      ${own.length ? `<button class="linkish node-toggle" data-act="tree-toggle" data-k="${n.id}" aria-expanded="${isOpen}">${isOpen ? "Karten ausblenden" : `${own.length} ${own.length === 1 ? "Karte" : "Karten"} anzeigen`}</button>` : ""}
+      ${own.length ? `<button class="linkish node-toggle" data-act="tree-toggle" data-k="${n.id}" aria-expanded="${isOpen}">${isOpen ? T("Karten ausblenden") : Tn(own.length, "{n} Karte anzeigen", "{n} Karten anzeigen")}</button>` : ""}
     </div>
     ${isOpen ? `<ul class="cardlist">${own.map(cardRow).join("")}</ul>` : ""}
     ${n.children.length ? `<ul>${n.children.map(nodeHTML).join("")}</ul>` : ""}</li>`;
@@ -2200,12 +2281,12 @@ function treeHTML(t) {
   <div class="panel tree-panel">
     ${tt.root.label ? `<p class="tree-root">${esc(tt.root.label)}</p>` : ""}
     <ul class="tree">${tt.root.children.map(nodeHTML).join("")}</ul>
-    <p class="muted small">${tt.assign.size} von ${tt.entries.length} Karten zugeordnet${manual ? `, davon ${manual} von Hand` : ""}. Die Balken zeigen die Karteikasten-Fächer, der Prozentwert den Fortschritt. Unter „Karten anzeigen“ kannst du jede Karte einem anderen Zweig zuordnen.</p>
-    ${section("unsure", `${unsureList.length} unsichere ${unsureList.length === 1 ? "Zuordnung" : "Zuordnungen"} prüfen`, unsureList,
-      `<p class="muted small">Diese Karten passen fast gleich gut zu zwei Zweigen. Ein Klick auf den richtigen Zweig legt sie fest.</p>`)}
-    ${section("rest", `${rest.length} ${rest.length === 1 ? "Karte" : "Karten"} ohne Zweig`, rest,
-      `<p class="muted small">Oft fehlt dafür ein Zweig im Baum. Ergänze ihn unter „Bearbeiten“ oder ordne die Karte hier direkt zu.</p>
-       ${sg.length ? `<p class="small">Vorschläge für neue Zweige: ${sg.map(x => `<b>${esc(x.label)}</b> (${x.hits})`).join(", ")}. <button class="linkish" data-act="topic-edit" data-id="${t.id}">Im Editor hinzufügen</button></p>` : ""}`)}
+    <p class="muted small">${manual ? T("{a} von {b} Karten zugeordnet, davon {m} von Hand.", { a: tt.assign.size, b: tt.entries.length, m: manual }) : T("{a} von {b} Karten zugeordnet.", { a: tt.assign.size, b: tt.entries.length })} ${T("Die Balken zeigen die Karteikasten-Fächer, der Prozentwert den Fortschritt. Unter „Karten anzeigen“ kannst du jede Karte einem anderen Zweig zuordnen.")}</p>
+    ${section("unsure", Tn(unsureList.length, "{n} unsichere Zuordnung prüfen", "{n} unsichere Zuordnungen prüfen"), unsureList,
+      `<p class="muted small">${T("Diese Karten passen fast gleich gut zu zwei Zweigen. Ein Klick auf den richtigen Zweig legt sie fest.")}</p>`)}
+    ${section("rest", Tn(rest.length, "{n} Karte ohne Zweig", "{n} Karten ohne Zweig"), rest,
+      `<p class="muted small">${T("Oft fehlt dafür ein Zweig im Baum. Ergänze ihn unter „Bearbeiten“ oder ordne die Karte hier direkt zu.")}</p>
+       ${sg.length ? `<p class="small">${T("Vorschläge für neue Zweige:")} ${sg.map(x => `<b>${esc(x.label)}</b> (${x.hits})`).join(", ")}. <button class="linkish" data-act="topic-edit" data-id="${t.id}">${T("Im Editor hinzufügen")}</button></p>` : ""}`)}
   </div>`;
 }
 
@@ -2215,34 +2296,34 @@ function outlineEditorHTML(te) {
   const rows = [];
   const walk = (list, depth) => list.forEach((n, i) => { rows.push({ n, depth, i, last: i === list.length - 1 }); walk(n.children, depth + 1); });
   walk(ol.children, 0);
-  const count = id => { const st = stats.get(id); return st ? `${st.cards} ${st.cards === 1 ? "Karte" : "Karten"}` : ""; };
+  const count = id => { const st = stats.get(id); return st ? Tn(st.cards, "{n} Karte", "{n} Karten") : ""; };
   return `
   <div class="field outline-field">
-    <span>Themenbaum <span class="hint">Optional. Ein Zweig pro Zeile, „Autor: Begriffe“ hilft bei der Zuordnung. Enter: nächster Zweig, Tab: einrücken, Shift+Tab: ausrücken.</span></span>
-    <input type="text" id="ol-title" class="ol-title" value="${esc(ol.title || "")}" placeholder="Leitfrage oder Überschrift (optional)" aria-label="Überschrift des Baums">
+    <span>${T("Themenbaum")} <span class="hint">${T("Optional. Ein Zweig pro Zeile, „Autor: Begriffe“ hilft bei der Zuordnung. Enter: nächster Zweig, Tab: einrücken, Shift+Tab: ausrücken.")}</span></span>
+    <input type="text" id="ol-title" class="ol-title" value="${esc(ol.title || "")}" placeholder="${T("Leitfrage oder Überschrift (optional)")}" aria-label="${T("Überschrift des Baums")}">
     <div class="outline">${rows.map(({ n, depth, i, last }) => `
       <div class="ol-row" style="--d:${depth}">
         <span class="ol-dot" aria-hidden="true"></span>
-        <input type="text" class="ol-input" data-nid="${n.id}" value="${esc(n.label)}" placeholder="${depth ? "Unterthema, z. B. Porter: Operative Effizienz" : "Hauptzweig"}" aria-label="Zweig, Ebene ${depth + 1}">
+        <input type="text" class="ol-input" data-nid="${n.id}" value="${esc(n.label)}" placeholder="${depth ? T("Unterthema, z. B. Porter: Operative Effizienz") : T("Hauptzweig")}" aria-label="${T("Zweig, Ebene {n}", { n: depth + 1 })}">
         <span class="ol-count" data-nid="${n.id}">${count(n.id)}</span>
         <span class="ol-btns">
-          <button type="button" class="ol-btn" data-act="ol-out" data-nid="${n.id}" title="Ausrücken (Shift+Tab)" aria-label="Ausrücken" ${depth ? "" : "disabled"}>←</button>
-          <button type="button" class="ol-btn" data-act="ol-in" data-nid="${n.id}" title="Einrücken (Tab)" aria-label="Einrücken" ${i ? "" : "disabled"}>→</button>
-          <button type="button" class="ol-btn" data-act="ol-up" data-nid="${n.id}" title="Nach oben (Alt+↑)" aria-label="Nach oben" ${i ? "" : "disabled"}>↑</button>
-          <button type="button" class="ol-btn" data-act="ol-down" data-nid="${n.id}" title="Nach unten (Alt+↓)" aria-label="Nach unten" ${last ? "disabled" : ""}>↓</button>
-          <button type="button" class="ol-btn" data-act="ol-child" data-nid="${n.id}" title="Unterzweig hinzufügen" aria-label="Unterzweig hinzufügen">+</button>
-          <button type="button" class="ol-btn" data-act="ol-del" data-nid="${n.id}" title="Löschen (Unterzweige rücken nach)" aria-label="Löschen">✕</button>
+          <button type="button" class="ol-btn" data-act="ol-out" data-nid="${n.id}" title="${T("Ausrücken (Shift+Tab)")}" aria-label="${T("Ausrücken")}" ${depth ? "" : "disabled"}>←</button>
+          <button type="button" class="ol-btn" data-act="ol-in" data-nid="${n.id}" title="${T("Einrücken (Tab)")}" aria-label="${T("Einrücken")}" ${i ? "" : "disabled"}>→</button>
+          <button type="button" class="ol-btn" data-act="ol-up" data-nid="${n.id}" title="${T("Nach oben (Alt+↑)")}" aria-label="${T("Nach oben")}" ${i ? "" : "disabled"}>↑</button>
+          <button type="button" class="ol-btn" data-act="ol-down" data-nid="${n.id}" title="${T("Nach unten (Alt+↓)")}" aria-label="${T("Nach unten")}" ${last ? "disabled" : ""}>↓</button>
+          <button type="button" class="ol-btn" data-act="ol-child" data-nid="${n.id}" title="${T("Unterzweig hinzufügen")}" aria-label="${T("Unterzweig hinzufügen")}">+</button>
+          <button type="button" class="ol-btn" data-act="ol-del" data-nid="${n.id}" title="${T("Löschen (Unterzweige rücken nach)")}" aria-label="${T("Löschen")}">✕</button>
         </span>
       </div>`).join("")}
     </div>
     <div class="row-actions">
-      <button type="button" class="btn ghost sm" data-act="ol-add">+ Hauptzweig</button>
-      <button type="button" class="btn ghost sm" data-act="ol-text" aria-pressed="${!!te.textOpen}">Als Text einfügen</button>
-      ${tt.root ? `<span class="muted small" id="ol-summary">${tt.assign.size} von ${tt.entries.length} Karten zugeordnet</span>` : ""}
+      <button type="button" class="btn ghost sm" data-act="ol-add">+ ${T("Hauptzweig")}</button>
+      <button type="button" class="btn ghost sm" data-act="ol-text" aria-pressed="${!!te.textOpen}">${T("Als Text einfügen")}</button>
+      ${tt.root ? `<span class="muted small" id="ol-summary">${T("{a} von {b} Karten zugeordnet", { a: tt.assign.size, b: tt.entries.length })}</span>` : ""}
     </div>
     ${te.textOpen ? `<div class="ol-paste">
-      <textarea id="topic-tree" rows="7" spellcheck="false" placeholder="Thema&#10;├── 1. Grundlagen&#10;│   └── Porter: Operative Effizienz vs. strategische Position&#10;└── 2. Innovation&#10;    └── Christensen: Disruptive Innovation">${esc(te.pasteText || "")}</textarea>
-      <div class="row-actions"><button type="button" class="btn ghost sm" data-act="ol-text-apply">${ol.children.length ? "Gliederung ersetzen" : "Übernehmen"}</button><span class="hint" id="tree-preview">${treePreviewText(te.pasteText)}</span></div>
+      <textarea id="topic-tree" rows="7" spellcheck="false" placeholder="${T("Thema&#10;├── 1. Grundlagen&#10;│   └── Porter: Operative Effizienz vs. strategische Position&#10;└── 2. Innovation&#10;    └── Christensen: Disruptive Innovation")}">${esc(te.pasteText || "")}</textarea>
+      <div class="row-actions"><button type="button" class="btn ghost sm" data-act="ol-text-apply">${ol.children.length ? T("Gliederung ersetzen") : T("Übernehmen")}</button><span class="hint" id="tree-preview">${treePreviewText(te.pasteText)}</span></div>
     </div>` : ""}
     <div id="ol-suggs">${suggestionsHTML(te)}</div>
   </div>`;
@@ -2251,32 +2332,32 @@ function suggestionsHTML(te) {
   const tt = draftTree(te);
   const sg = te.suggestions = tt.root ? suggestBranches(tt, te.outline) : [];
   if (!sg.length) return "";
-  return `<div class="suggs"><p class="small"><b>Vorschläge aus Karten ohne Zweig</b></p>${sg.map((x, i) => `
-    <div class="sugg"><b>${esc(x.label)}</b><span>${x.hits} Karten ohne Zweig${x.parentLabel ? ` · passt unter „${esc(x.parentLabel)}“` : ""}</span>
-      <button type="button" class="btn ghost sm" data-act="ol-sugg" data-i="${i}">Als Zweig hinzufügen</button></div>`).join("")}</div>`;
+  return `<div class="suggs"><p class="small"><b>${T("Vorschläge aus Karten ohne Zweig")}</b></p>${sg.map((x, i) => `
+    <div class="sugg"><b>${esc(x.label)}</b><span>${Tn(x.hits, "{n} Karte ohne Zweig", "{n} Karten ohne Zweig")}${x.parentLabel ? " · " + T("passt unter „{p}“", { p: esc(x.parentLabel) }) : ""}</span>
+      <button type="button" class="btn ghost sm" data-act="ol-sugg" data-i="${i}">${T("Als Zweig hinzufügen")}</button></div>`).join("")}</div>`;
 }
 
 function topicEditHTML() {
   const te = state.topicEdit;
   return `
   <div class="panel topic-edit">
-    <label class="field">Name des Themas<input type="text" id="topic-name" value="${esc(te.name)}" maxlength="80" placeholder="z. B. Digitale Innovationsstrategie"></label>
-    <fieldset class="color-picks"><legend>Farbe</legend>
-      ${Array.from({ length: COLORS }, (_, i) => `<label class="swatch" style="--fc:var(--fach-${i})"><input type="radio" name="topic-color" value="${i}" ${(te.color ?? 0) === i ? "checked" : ""}><span class="sr">Farbe ${i + 1}</span></label>`).join("")}
+    <label class="field">${T("Name des Themas")}<input type="text" id="topic-name" value="${esc(te.name)}" maxlength="80" placeholder="${T("z. B. Digitale Innovationsstrategie")}"></label>
+    <fieldset class="color-picks"><legend>${T("Farbe")}</legend>
+      ${Array.from({ length: COLORS }, (_, i) => `<label class="swatch" style="--fc:var(--fach-${i})"><input type="radio" name="topic-color" value="${i}" ${(te.color ?? 0) === i ? "checked" : ""}><span class="sr">${T("Farbe {n}", { n: i + 1 })}</span></label>`).join("")}
     </fieldset>
     ${outlineEditorHTML(te)}
-    <fieldset class="deck-picks"><legend>Kartensets in diesem Thema</legend>
+    <fieldset class="deck-picks"><legend>${T("Kartensets in diesem Thema")}</legend>
       ${state.decks.length ? state.decks.map(d => {
         const other = d.topic && d.topic !== te.id && topicById(d.topic);
-        return `<label class="check"><input type="checkbox" class="topic-deck" value="${d.id}" ${te.deckIds.has(d.id) ? "checked" : ""}> ${esc(d.name)}${other ? ` <span class="muted small">(jetzt in „${esc(other.name)}“)</span>` : ""}</label>`;
-      }).join("") : `<p class="muted small">Noch keine Kartensets vorhanden.</p>`}
+        return `<label class="check"><input type="checkbox" class="topic-deck" value="${d.id}" ${te.deckIds.has(d.id) ? "checked" : ""}> ${esc(d.name)}${other ? ` <span class="muted small">${T("(jetzt in „{name}“)", { name: esc(other.name) })}</span>` : ""}</label>`;
+      }).join("") : `<p class="muted small">${T("Noch keine Kartensets vorhanden.")}</p>`}
     </fieldset>
     <div class="row-actions">
-      <button class="btn primary" data-act="topic-save">${te.id ? "Speichern" : "Thema anlegen"}</button>
-      <button class="btn ghost" data-act="topic-cancel">Abbrechen</button>
+      <button class="btn primary" data-act="topic-save">${te.id ? T("Speichern") : T("Thema anlegen")}</button>
+      <button class="btn ghost" data-act="topic-cancel">${T("Abbrechen")}</button>
       ${te.id ? (te.confirmDelete
-        ? `<span class="small">Thema löschen? Die Kartensets bleiben erhalten.</span><button class="btn danger solid sm" data-act="topic-del-yes">Thema löschen</button><button class="btn ghost sm" data-act="topic-del-no">Behalten</button>`
-        : `<button class="btn danger" data-act="topic-del">Thema löschen</button>`) : ""}
+        ? `<span class="small">${T("Thema löschen? Die Kartensets bleiben erhalten.")}</span><button class="btn danger solid sm" data-act="topic-del-yes">${T("Thema löschen")}</button><button class="btn ghost sm" data-act="topic-del-no">${T("Behalten")}</button>`
+        : `<button class="btn danger" data-act="topic-del">${T("Thema löschen")}</button>`) : ""}
     </div>
   </div>`;
 }
@@ -2291,18 +2372,18 @@ function deckHTML(deck) {
     <div class="deck-row">
       <div class="deck-main">
         <h3>${esc(deck.name)}</h3>
-        <p class="counts">${due ? `<span class="c-rev">${due} fällig</span>` : `<span>0 fällig</span>`} · ${q.nNew ? `<span class="c-new">${q.nNew} neu</span>` : `0 neu`} · ${deck.cardCount} Karten</p>
+        <p class="counts">${countsLine(due, q.nNew, null, deck.cardCount || 0)}</p>
         ${masteryHTML(deck)}
       </div>
       <div class="deck-actions">
         ${(() => {
           const off = nothing ? extraOffer([deck]) : null;
-          return off?.ok ? `<button class="btn ghost" data-act="study" data-extra="1" data-id="${deck.id}" title="Die heutigen neuen Karten sitzen schon gut">${off.n} weitere neue</button>`
-            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study" data-id="${deck.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Lernen"}</button>`;
+          return off?.ok ? `<button class="btn ghost" data-act="study" data-extra="1" data-id="${deck.id}" title="${T("Die heutigen neuen Karten sitzen schon gut")}">${T("{n} weitere neue", { n: off.n })}</button>`
+            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study" data-id="${deck.id}" ${nothing ? "disabled" : ""}>${nothing ? T("Für heute fertig") : T("Lernen")}</button>`;
         })()}
-        <button class="btn ghost" data-act="tab" data-tab="cards" data-id="${deck.id}" aria-pressed="${open === "cards"}">Karten</button>
-        <button class="btn ghost" data-act="tab" data-tab="stats" data-id="${deck.id}" aria-pressed="${open === "stats"}">Statistik</button>
-        <button class="btn ghost" data-act="tab" data-tab="settings" data-id="${deck.id}" aria-pressed="${open === "settings"}">Einstellungen</button>
+        <button class="btn ghost" data-act="tab" data-tab="cards" data-id="${deck.id}" aria-pressed="${open === "cards"}">${T("Karten")}</button>
+        <button class="btn ghost" data-act="tab" data-tab="stats" data-id="${deck.id}" aria-pressed="${open === "stats"}">${T("Statistik")}</button>
+        <button class="btn ghost" data-act="tab" data-tab="settings" data-id="${deck.id}" aria-pressed="${open === "settings"}">${T("Einstellungen")}</button>
       </div>
     </div>
     ${open === "stats" ? statsHTML(deck) : open === "settings" ? settingsHTML(deck) : open === "cards" ? cardsHTML(deck) : ""}
@@ -2316,13 +2397,13 @@ function masteryBar(p) {
   const stage = (n, name, hint) => `<div class="stage" title="${hint}"><div class="stage-top"><b>${n}</b><span>${name}</span></div><div class="stage-bar"><i style="width:${p.units ? n / p.units * 100 : 0}%"></i></div></div>`;
   return `<div class="mastery">
     <div class="stages">
-      ${stage(p.started, "angefangen", "Mindestens einmal gelernt")}
-      ${stage(p.learned, "gelernt", "Kurze Lernrunden geschafft, kommt erst in ein paar Tagen wieder")}
-      ${stage(p.solid, "gefestigt", "Sitzt mindestens 3 Wochen")}
+      ${stage(p.started, T("angefangen"), T("Mindestens einmal gelernt"))}
+      ${stage(p.learned, T("gelernt"), T("Kurze Lernrunden geschafft, kommt erst in ein paar Tagen wieder"))}
+      ${stage(p.solid, T("gefestigt"), T("Sitzt mindestens 3 Wochen"))}
     </div>
     <div class="mastery-line">
-      ${p.tier ? `<span class="tier" style="--t:var(${p.tier.color})">${p.tier.name}</span>` : ""}
-      <span>von ${p.units} Karten · ${p.pct} % Fortschritt${next ? ` · ${next.name} ab ${next.min} %` : ""}</span>
+      ${p.tier ? `<span class="tier" style="--t:var(${p.tier.color})">${T(p.tier.name)}</span>` : ""}
+      <span>${T("von {n} Karten", { n: p.units })} · ${T("{p} Fortschritt", { p: pctN(p.pct) })}${next ? " · " + T("{tier} ab {p}", { tier: T(next.name), p: pctN(next.min) }) : ""}</span>
     </div>
   </div>`;
 }
@@ -2330,12 +2411,12 @@ function masteryBar(p) {
 function kastenHTML(deck) {
   const p = deckProgress(deck), max = Math.max(1, ...p.counts);
   return `<div>
-    <p class="eyebrow" style="margin-bottom:8px">Dein Karteikasten</p>
+    <p class="eyebrow" style="margin-bottom:8px">${T("Dein Karteikasten")}</p>
     <div class="kasten">${p.counts.map((n, i) => {
       const slices = n ? Math.max(1, Math.round(n / max * 12)) : 0;
-      return `<div class="fach"><div class="stack" aria-hidden="true">${`<i class="f${i}"></i>`.repeat(slices)}</div><b>${n}</b><span class="nm">${FAECHER[i].name}</span><span class="sub">${FAECHER[i].sub}</span></div>`;
+      return `<div class="fach"><div class="stack" aria-hidden="true">${`<i class="f${i}"></i>`.repeat(slices)}</div><b>${n}</b><span class="nm">${T(FAECHER[i].name)}</span><span class="sub">${T(FAECHER[i].sub)}</span></div>`;
     }).join("")}</div>
-    <p class="muted small" style="margin-top:8px">Je weiter rechts, desto länger sitzt die Karte. Gewusste Karten rücken ein Fach weiter, vergessene fallen zurück in Fach 1. Die Angabe unter dem Fach ist die Zeit, die du die Karte voraussichtlich sicher behältst.</p>
+    <p class="muted small" style="margin-top:8px">${T("Je weiter rechts, desto länger sitzt die Karte. Gewusste Karten rücken ein Fach weiter, vergessene fallen zurück in Fach 1. Die Angabe unter dem Fach ist die Zeit, die du die Karte voraussichtlich sicher behältst.")}</p>
   </div>`;
 }
 
@@ -2344,13 +2425,13 @@ function badgesHTML() {
   const have = state.profile.badges;
   const list = [...BADGES].sort((a, b) => (have[b.id] ? 1 : 0) - (have[a.id] ? 1 : 0));
   const n = BADGES.filter(b => have[b.id]).length;
-  const fmt = t => new Date(t).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+  const fmt = t => new Date(t).toLocaleDateString(LOCALE(), { day: "numeric", month: "short" });
   return `
   <section aria-labelledby="badges-h">
-    <div class="sec-head"><h2 id="badges-h">Abzeichen</h2><span class="muted small">${n} von ${BADGES.length}</span></div>
+    <div class="sec-head"><h2 id="badges-h">${T("Abzeichen")}</h2><span class="muted small">${T("{a} von {b}", { a: n, b: BADGES.length })}</span></div>
     <div class="badges">${list.map(b => `<div class="badge ${have[b.id] ? "on" : ""}" ${b.color ? `style="--b:var(${b.color})"` : ""}>
       <span class="disc" aria-hidden="true">${esc(b.mark)}</span>
-      <span class="txt"><b>${esc(b.name)}</b><span>${have[b.id] ? "Erreicht am " + fmt(have[b.id]) : esc(b.hint)}</span></span>
+      <span class="txt"><b>${esc(T(b.name))}</b><span>${have[b.id] ? T("Erreicht am {d}", { d: fmt(have[b.id]) }) : esc(T(b.hint))}</span></span>
     </div>`).join("")}</div>
   </section>`;
 }
@@ -2358,29 +2439,29 @@ function badgesHTML() {
 function statsHTML(deck) {
   const s = deckStats(deck);
   const max = Math.max(1, ...s.forecast);
-  const wd = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-  const labels = s.forecast.map((_, i) => i === 0 ? "Heute" : wd[new Date(Date.now() + i * DAY).getDay()]);
+  const wd = weekdays();
+  const labels = s.forecast.map((_, i) => i === 0 ? T("Heute") : wd[new Date(Date.now() + i * DAY).getDay()]);
   return `
   <div class="panel">
     ${kastenHTML(deck)}
     <div class="tiles">
-      <div class="tile"><b>${s.fresh}</b><span>noch nie gesehen</span></div>
-      <div class="tile"><b>${s.learning}</b><span>gerade in der Lernphase</span></div>
-      <div class="tile"><b>${s.review}</b><span>gelernt</span></div>
-      <div class="tile"><b>${s.mature}</b><span>gefestigt (Abstand ab 3 Wochen)</span></div>
-      <div class="tile"><b>${s.avgR == null ? "–" : pct(s.avgR)}</b><span>geschätzt gerade abrufbar</span></div>
-      <div class="tile"><b>${(deck.revDay === dayKey() ? deck.revCount : 0) || 0}</b><span>Antworten heute</span></div>
+      <div class="tile"><b>${s.fresh}</b><span>${T("noch nie gesehen")}</span></div>
+      <div class="tile"><b>${s.learning}</b><span>${T("gerade in der Lernphase")}</span></div>
+      <div class="tile"><b>${s.review}</b><span>${T("gelernt")}</span></div>
+      <div class="tile"><b>${s.mature}</b><span>${T("gefestigt (Abstand ab 3 Wochen)")}</span></div>
+      <div class="tile"><b>${s.avgR == null ? "–" : pct(s.avgR)}</b><span>${T("geschätzt gerade abrufbar")}</span></div>
+      <div class="tile"><b>${(deck.revDay === dayKey() ? deck.revCount : 0) || 0}</b><span>${T("Antworten heute")}</span></div>
     </div>
     <div class="chart">
-      <p class="eyebrow">Fällige Karten, nächste 14 Tage</p>
-      <div class="bars" role="img" aria-label="Fällige Karten pro Tag: ${s.forecast.map((n, i) => labels[i] + " " + n).join(", ")}">
+      <p class="eyebrow">${T("Fällige Karten, nächste 14 Tage")}</p>
+      <div class="bars" role="img" aria-label="${T("Fällige Karten pro Tag:")} ${s.forecast.map((n, i) => labels[i] + " " + n).join(", ")}">
         ${s.forecast.map((n, i) => `<div class="bar ${i === 0 ? "today" : ""}"><span>${n || ""}</span><i style="height:${(n / max) * 100}%"></i></div>`).join("")}
       </div>
       <div class="bar-labels">${s.forecast.map((_, i) => `<span${i === 0 ? ' style="color:var(--rev);font-weight:700"' : ""}>${wd[new Date(Date.now() + i * DAY).getDay()]}</span>`).join("")}</div>
-      <p class="muted small">Grüner Balken = heute fällig.</p>
+      <p class="muted small">${T("Grüner Balken = heute fällig.")}</p>
     </div>
-    ${s.hard.length ? `<div><p class="eyebrow" style="margin-bottom:8px">Am häufigsten vergessen</p><ul class="hard-list">${s.hard.slice(0, 8).map(h => `<li><span>${esc(plain(h.text).slice(0, 120))}</span><span>${h.lapses}× vergessen</span></li>`).join("")}</ul><p class="muted small" style="margin-top:8px">Tipp: Formuliere solche Karten kürzer oder teile sie in zwei auf. <button class="linkish" data-act="cl-open" data-id="${deck.id}" data-filter="leech">Problemkarten bearbeiten</button></p></div>` : ""}
-    ${s.suspended ? `<p class="muted small">${s.suspended} ${s.suspended === 1 ? "Karte ist" : "Karten sind"} ausgesetzt und zählen hier nicht mit. <button class="linkish" data-act="cl-open" data-id="${deck.id}" data-filter="susp">Ansehen</button></p>` : ""}
+    ${s.hard.length ? `<div><p class="eyebrow" style="margin-bottom:8px">${T("Am häufigsten vergessen")}</p><ul class="hard-list">${s.hard.slice(0, 8).map(h => `<li><span>${esc(plain(h.text).slice(0, 120))}</span><span>${T("{n}× vergessen", { n: h.lapses })}</span></li>`).join("")}</ul><p class="muted small" style="margin-top:8px">${T("Tipp: Formuliere solche Karten kürzer oder teile sie in zwei auf.")} <button class="linkish" data-act="cl-open" data-id="${deck.id}" data-filter="leech">${T("Problemkarten bearbeiten")}</button></p></div>` : ""}
+    ${s.suspended ? `<p class="muted small">${Tn(s.suspended, "{n} Karte ist ausgesetzt und zählt hier nicht mit.", "{n} Karten sind ausgesetzt und zählen hier nicht mit.")} <button class="linkish" data-act="cl-open" data-id="${deck.id}" data-filter="susp">${T("Ansehen")}</button></p>` : ""}
   </div>`;
 }
 
@@ -2390,35 +2471,35 @@ function settingsHTML(deck) {
   return `
   <div class="panel">
     <div class="form-grid">
-      <label class="field">Name<input type="text" id="set-name" data-id="${deck.id}" value="${esc(deck.name)}" maxlength="120"></label>
-      ${state.topics.length ? `<label class="field">Thema<select id="set-topic" data-id="${deck.id}">
-        <option value="">Ohne Thema</option>${state.topics.map(t => `<option value="${t.id}" ${deck.topic === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
+      <label class="field">${T("Name")}<input type="text" id="set-name" data-id="${deck.id}" value="${esc(deck.name)}" maxlength="120"></label>
+      ${state.topics.length ? `<label class="field">${T("Thema")}<select id="set-topic" data-id="${deck.id}">
+        <option value="">${T("Ohne Thema")}</option>${state.topics.map(t => `<option value="${t.id}" ${deck.topic === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
       </select></label>` : ""}
-      <label class="field">Neue Karten pro Tag<input type="number" id="set-new" data-id="${deck.id}" min="0" max="500" value="${deck.newPerDay ?? 20}"><span class="hint">Jede neue Karte bringt in den nächsten Tagen etwa 5–10 Wiederholungen mit.</span></label>
-      <label class="field">Abfragerichtung<select id="set-dir" data-id="${deck.id}">
-        <option value="f" ${deck.dir === "f" ? "selected" : ""}>Vorderseite → Rückseite</option>
-        <option value="r" ${deck.dir === "r" ? "selected" : ""}>Rückseite → Vorderseite</option>
-        <option value="b" ${deck.dir === "b" ? "selected" : ""}>Beide Richtungen</option>
-      </select><span class="hint">Bei beiden Richtungen hat jede Richtung ihren eigenen Lernstand.</span></label>
-      <label class="field">Abfrageart<select id="set-mode" data-id="${deck.id}">
-        <option value="auto" ${(deck.mode || "auto") === "auto" ? "selected" : ""}>Automatisch (empfohlen)</option>
-        <option value="type" ${deck.mode === "type" ? "selected" : ""}>Immer eintippen</option>
-        <option value="mc" ${deck.mode === "mc" ? "selected" : ""}>Immer Multiple Choice</option>
-        <option value="self" ${deck.mode === "self" ? "selected" : ""}>Eintippen, selbst vergleichen</option>
-        <option value="flip" ${deck.mode === "flip" ? "selected" : ""}>Nur aufdecken</option>
-      </select><span class="hint">Automatisch: neue Karten als Multiple Choice, danach Antwort eintippen. Lange Antworten werden über Schlüsselbegriffe geprüft. Mit *Sternchen* in der CSV legst du die Begriffe selbst fest.</span></label>
+      <label class="field">${T("Neue Karten pro Tag")}<input type="number" id="set-new" data-id="${deck.id}" min="0" max="500" value="${deck.newPerDay ?? 20}"><span class="hint">${T("Jede neue Karte bringt in den nächsten Tagen etwa 5–10 Wiederholungen mit.")}</span></label>
+      <label class="field">${T("Abfragerichtung")}<select id="set-dir" data-id="${deck.id}">
+        <option value="f" ${deck.dir === "f" ? "selected" : ""}>${T("Vorderseite → Rückseite")}</option>
+        <option value="r" ${deck.dir === "r" ? "selected" : ""}>${T("Rückseite → Vorderseite")}</option>
+        <option value="b" ${deck.dir === "b" ? "selected" : ""}>${T("Beide Richtungen")}</option>
+      </select><span class="hint">${T("Bei beiden Richtungen hat jede Richtung ihren eigenen Lernstand.")}</span></label>
+      <label class="field">${T("Abfrageart")}<select id="set-mode" data-id="${deck.id}">
+        <option value="auto" ${(deck.mode || "auto") === "auto" ? "selected" : ""}>${T("Automatisch (empfohlen)")}</option>
+        <option value="type" ${deck.mode === "type" ? "selected" : ""}>${T("Immer eintippen")}</option>
+        <option value="mc" ${deck.mode === "mc" ? "selected" : ""}>${T("Immer Multiple Choice")}</option>
+        <option value="self" ${deck.mode === "self" ? "selected" : ""}>${T("Eintippen, selbst vergleichen")}</option>
+        <option value="flip" ${deck.mode === "flip" ? "selected" : ""}>${T("Nur aufdecken")}</option>
+      </select><span class="hint">${T("Automatisch: neue Karten als Multiple Choice, danach Antwort eintippen. Lange Antworten werden über Schlüsselbegriffe geprüft. Mit *Sternchen* in der CSV legst du die Begriffe selbst fest.")}</span></label>
     </div>
-    <label class="field">Ziel: so viel sollst du noch wissen, wenn eine Karte wiederkommt · <span id="ret-out">${ret} %</span>
+    <label class="field">${T("Ziel: so viel sollst du noch wissen, wenn eine Karte wiederkommt")} · <span id="ret-out">${pctN(ret)}</span>
       <input type="range" id="set-ret" data-id="${deck.id}" min="75" max="97" step="1" value="${ret}">
-      <span class="hint">Höher heißt öfter wiederholen und sicherer behalten. 90 % passt für die meisten. Ab 95 % steigt der Aufwand stark, vor Prüfungen kann sich das lohnen.</span>
+      <span class="hint">${T("Höher heißt öfter wiederholen und sicherer behalten. 90 % passt für die meisten. Ab 95 % steigt der Aufwand stark, vor Prüfungen kann sich das lohnen.")}</span>
     </label>
     <div class="row-actions">
-      <label class="btn ghost" for="file-add-${deck.id}">CSV-Datei ergänzen</label>
+      <label class="btn ghost" for="file-add-${deck.id}">${T("CSV-Datei ergänzen")}</label>
       <input class="sr" type="file" id="file-add-${deck.id}" data-id="${deck.id}" accept=".csv,.tsv,.txt,text/csv,text/plain">
-      <button class="btn ghost" data-act="csv" data-id="${deck.id}">Als CSV exportieren</button>
+      <button class="btn ghost" data-act="csv" data-id="${deck.id}">${T("Als CSV exportieren")}</button>
       ${confirming
-        ? `<span class="small">${deck.cardCount} Karten und Lernstand endgültig löschen?</span><button class="btn danger solid sm" data-act="del-yes" data-id="${deck.id}">Endgültig löschen</button><button class="btn ghost sm" data-act="del-no">Behalten</button>`
-        : `<button class="btn danger" data-act="del" data-id="${deck.id}">Stapel löschen</button>`}
+        ? `<span class="small">${Tn(deck.cardCount || 0, "{n} Karte und Lernstand endgültig löschen?", "{n} Karten und Lernstand endgültig löschen?")}</span><button class="btn danger solid sm" data-act="del-yes" data-id="${deck.id}">${T("Endgültig löschen")}</button><button class="btn ghost sm" data-act="del-no">${T("Behalten")}</button>`
+        : `<button class="btn danger" data-act="del" data-id="${deck.id}">${T("Stapel löschen")}</button>`}
     </div>
   </div>`;
 }
@@ -2440,37 +2521,37 @@ function listCards(deck) {
 }
 function cardFormHTML(prefix, f, b, extra, save, saveAttrs) {
   return `
-    <label class="field">Vorderseite<textarea class="ce-input" id="${prefix}-f" rows="2">${esc(f)}</textarea></label>
-    <label class="field">Rückseite<textarea class="ce-input" id="${prefix}-b" rows="3">${esc(b)}</textarea><span class="hint">Mit *Sternchen* markierst du Schlüsselbegriffe.</span></label>
+    <label class="field">${T("Vorderseite")}<textarea class="ce-input" id="${prefix}-f" rows="2">${esc(f)}</textarea></label>
+    <label class="field">${T("Rückseite")}<textarea class="ce-input" id="${prefix}-b" rows="3">${esc(b)}</textarea><span class="hint">${T("Mit *Sternchen* markierst du Schlüsselbegriffe.")}</span></label>
     ${extra}
     <div class="row-actions">
-      <button class="btn primary sm" data-act="${save}" ${saveAttrs}>Speichern</button>
-      <button class="btn ghost sm" data-act="${save === "st-save" ? "st-cancel" : save === "cl-add-save" ? "cl-add-cancel" : "cl-cancel"}">Abbrechen</button>
+      <button class="btn primary sm" data-act="${save}" ${saveAttrs}>${T("Speichern")}</button>
+      <button class="btn ghost sm" data-act="${save === "st-save" ? "st-cancel" : save === "cl-add-save" ? "cl-add-cancel" : "cl-cancel"}">${T("Abbrechen")}</button>
     </div>`;
 }
 function cardRowsHTML(deck) {
   const cl = state.cardList, list = listCards(deck);
-  if (!list.length) return `<p class="muted small">${cl.q.trim() ? "Keine Karte gefunden." : cl.filter === "leech" ? `Keine Problemkarten. Als Problemkarte gilt eine Karte, die du ${LEECH}-mal oder öfter vergessen hast.` : cl.filter === "susp" ? "Keine Karte ausgesetzt." : "Keine Karten."}</p>`;
+  if (!list.length) return `<p class="muted small">${cl.q.trim() ? T("Keine Karte gefunden.") : cl.filter === "leech" ? T("Keine Problemkarten. Als Problemkarte gilt eine Karte, die du {n}-mal oder öfter vergessen hast.", { n: LEECH }) : cl.filter === "susp" ? T("Keine Karte ausgesetzt.") : T("Keine Karten.")}</p>`;
   const row = c => {
     if (cl.edit === c.i) return `<li class="ce-row editing">${cardFormHTML("ce", c.f, c.b,
-      c.sf || c.sr ? `<label class="check"><input type="checkbox" id="ce-reset"> Lernstand zurücksetzen (die Karte gilt dann wieder als neu)</label>` : "",
+      c.sf || c.sr ? `<label class="check"><input type="checkbox" id="ce-reset"> ${T("Lernstand zurücksetzen (die Karte gilt dann wieder als neu)")}</label>` : "",
       "cl-save", `data-id="${deck.id}" data-cid="${c.i}"`)}</li>`;
     const fach = cardFach(deck, c), n = lapsesOf(c);
     return `<li class="ce-row ${c.x ? "susp" : ""}">
       <div class="ce-text"><b>${esc(plain(c.f).slice(0, 200))}</b><span>${esc(plain(c.b).slice(0, 240))}</span></div>
       <div class="ce-meta">
-        ${c.x ? `<span class="cr-tag susp">ausgesetzt</span>` : `<span class="cr-tag">${FAECHER[fach].name}</span>`}
-        ${n >= LEECH ? `<span class="cr-tag leech">${n}× vergessen</span>` : ""}
+        ${c.x ? `<span class="cr-tag susp">${T("ausgesetzt")}</span>` : `<span class="cr-tag">${T(FAECHER[fach].name)}</span>`}
+        ${n >= LEECH ? `<span class="cr-tag leech">${T("{n}× vergessen", { n })}</span>` : ""}
       </div>
       <div class="ce-acts">${cl.confirmDel === c.i
-        ? `<span class="small">Karte und Lernstand löschen?</span><button class="btn danger solid sm" data-act="cl-del-yes" data-id="${deck.id}" data-cid="${c.i}">Löschen</button><button class="btn ghost sm" data-act="cl-del-no">Behalten</button>`
-        : `<button class="linkish" data-act="cl-edit" data-cid="${c.i}">Bearbeiten</button>
-           <button class="linkish" data-act="cl-susp" data-id="${deck.id}" data-cid="${c.i}">${c.x ? "Wieder lernen" : "Aussetzen"}</button>
-           <button class="linkish" data-act="cl-del" data-cid="${c.i}">Löschen</button>`}</div>
+        ? `<span class="small">${T("Karte und Lernstand löschen?")}</span><button class="btn danger solid sm" data-act="cl-del-yes" data-id="${deck.id}" data-cid="${c.i}">${T("Löschen")}</button><button class="btn ghost sm" data-act="cl-del-no">${T("Behalten")}</button>`
+        : `<button class="linkish" data-act="cl-edit" data-cid="${c.i}">${T("Bearbeiten")}</button>
+           <button class="linkish" data-act="cl-susp" data-id="${deck.id}" data-cid="${c.i}">${c.x ? T("Wieder lernen") : T("Aussetzen")}</button>
+           <button class="linkish" data-act="cl-del" data-cid="${c.i}">${T("Löschen")}</button>`}</div>
     </li>`;
   };
   return `<ul class="ce-list">${list.slice(0, cl.limit).map(row).join("")}</ul>
-    ${list.length > cl.limit ? `<button class="btn ghost sm" data-act="cl-more">Weitere ${Math.min(50, list.length - cl.limit)} von ${list.length - cl.limit} anzeigen</button>` : ""}`;
+    ${list.length > cl.limit ? `<button class="btn ghost sm" data-act="cl-more">${T("Weitere {a} von {b} anzeigen", { a: Math.min(50, list.length - cl.limit), b: list.length - cl.limit })}</button>` : ""}`;
 }
 function cardsHTML(deck) {
   const cl = state.cardList, cards = state.cards[deck.id] || [];
@@ -2479,18 +2560,18 @@ function cardsHTML(deck) {
   return `
   <div class="panel">
     <div class="ce-tools">
-      <label class="sr" for="cl-q">Karten durchsuchen</label>
-      <input type="text" id="cl-q" data-id="${deck.id}" placeholder="Suchen …" value="${esc(cl.q)}" autocomplete="off">
-      <label class="sr" for="cl-filter">Welche Karten</label>
+      <label class="sr" for="cl-q">${T("Karten durchsuchen")}</label>
+      <input type="text" id="cl-q" data-id="${deck.id}" placeholder="${T("Suchen …")}" value="${esc(cl.q)}" autocomplete="off">
+      <label class="sr" for="cl-filter">${T("Welche Karten")}</label>
       <select id="cl-filter" data-id="${deck.id}">
-        ${opt("all", `Alle (${cards.length})`)}${opt("new", `Noch nie gelernt (${nNew})`)}${opt("leech", `Problemkarten (${nLeech})`)}${opt("susp", `Ausgesetzt (${nSusp})`)}
+        ${opt("all", `${T("Alle")} (${cards.length})`)}${opt("new", `${T("Noch nie gelernt")} (${nNew})`)}${opt("leech", `${T("Problemkarten")} (${nLeech})`)}${opt("susp", `${T("Ausgesetzt")} (${nSusp})`)}
       </select>
-      <button class="btn ghost" data-act="cl-add">Neue Karte</button>
+      <button class="btn ghost" data-act="cl-add">${T("Neue Karte")}</button>
     </div>
     ${cl.adding ? `<div class="ce-row editing">${cardFormHTML("ce-new", "", "", "", "cl-add-save", `data-id="${deck.id}"`)}</div>` : ""}
-    ${nLeech && cl.filter !== "leech" ? `<p class="small ce-note">${nLeech} ${nLeech === 1 ? "Karte" : "Karten"} vergisst du immer wieder. Meist hilft es, sie kürzer zu formulieren oder aufzuteilen. <button class="linkish" data-act="cl-filter" data-filter="leech">Zeigen</button></p>` : ""}
+    ${nLeech && cl.filter !== "leech" ? `<p class="small ce-note">${Tn(nLeech, "{n} Karte vergisst du immer wieder.", "{n} Karten vergisst du immer wieder.")} ${T("Meist hilft es, sie kürzer zu formulieren oder aufzuteilen.")} <button class="linkish" data-act="cl-filter" data-filter="leech">${T("Zeigen")}</button></p>` : ""}
     <div id="cl-list">${cardRowsHTML(deck)}</div>
-    <p class="muted small">Ausgesetzte Karten kommen nicht mehr dran, bis du sie wieder aufnimmst. Ihr Lernstand bleibt erhalten.</p>
+    <p class="muted small">${T("Ausgesetzte Karten kommen nicht mehr dran, bis du sie wieder aufnimmst. Ihr Lernstand bleibt erhalten.")}</p>
   </div>`;
 }
 const focusEnd = sel => { const el = $(sel); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } };
@@ -2502,8 +2583,8 @@ function openCardList(deckId, filter = "all") {
 // Saves new text for a card. Returns false (and says why) if it cannot.
 function saveCardText(deck, c, f, b) {
   f = (f || "").trim().slice(0, 20000); b = (b || "").trim().slice(0, 20000);
-  if (!f || !b) { toast("Vorder- und Rückseite dürfen nicht leer sein."); return false; }
-  if ((state.cards[deck.id] || []).some(x => x !== c && x.f === f)) { toast("Eine andere Karte in diesem Stapel hat schon genau diese Vorderseite."); return false; }
+  if (!f || !b) { toast(T("Vorder- und Rückseite dürfen nicht leer sein.")); return false; }
+  if ((state.cards[deck.id] || []).some(x => x !== c && x.f === f)) { toast(T("Eine andere Karte in diesem Stapel hat schon genau diese Vorderseite.")); return false; }
   c.f = f; c.b = b; c.m = Date.now(); cardsRev++;
   return true;
 }
@@ -2670,7 +2751,7 @@ async function pullChanges({ quiet = false } = {}) {
     for (const list of chunks.values()) for (const { id, rev } of list) st.setRev(id, rev);
     SYNC.rev = ch.rev;
     if (!isTyping()) render();
-    if (!quiet) toast("Neuer Stand von einem anderen Gerät übernommen.");
+    if (!quiet) toast(T("Neuer Stand von einem anderen Gerät übernommen."));
   } catch { /* server unreachable: try again at the next check */ }
   finally { SYNC.busy = false; }
 }
@@ -2678,36 +2759,36 @@ async function pullChanges({ quiet = false } = {}) {
 /* ---------- Backup: download everything, restore from a file ---------- */
 function daysAgo(t) {
   const n = Math.round((new Date(dayKey()) - new Date(dayKey(t))) / DAY);
-  return n <= 0 ? "heute" : n === 1 ? "gestern" : "vor " + n + " Tagen";
+  return n <= 0 ? T("heute") : n === 1 ? T("gestern") : T("vor {n} Tagen", { n });
 }
 function backupHTML() {
   if (state.store?.kind !== "server" || !state.decks.length && !state.restore) return "";
   const b = state.backup, r = state.restore;
-  const time = t => new Date(t).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const time = t => new Date(t).toLocaleTimeString(LOCALE(), { hour: "2-digit", minute: "2-digit" });
   const auto = !b ? "" : b.lastAuto
-    ? `Automatisch gesichert ${daysAgo(b.lastAuto)}${daysAgo(b.lastAuto) === "heute" ? " um " + time(b.lastAuto) : ""}. Die App hebt jeden Tag eine Kopie auf, die letzten ${b.keep} Tage. Ordner: <code>${esc(b.dir)}</code>`
-    : `Die erste automatische Sicherung entsteht beim nächsten Start des Servers. Ordner: <code>${esc(b.dir)}</code>`;
+    ? `${dayKey(b.lastAuto) === dayKey() ? T("Automatisch gesichert heute um {time}.", { time: time(b.lastAuto) }) : T("Automatisch gesichert {when}.", { when: daysAgo(b.lastAuto) })} ${T("Die App hebt jeden Tag eine Kopie auf, die letzten {n} Tage.", { n: b.keep })} ${T("Ordner:")} <code>${esc(b.dir)}</code>`
+    : `${T("Die erste automatische Sicherung entsteht beim nächsten Start des Servers.")} ${T("Ordner:")} <code>${esc(b.dir)}</code>`;
   const stale = b && (!b.lastDownload || Date.now() - b.lastDownload > 30 * DAY);
-  const dl = !b ? "" : b.lastDownload ? `Zuletzt heruntergeladen: ${daysAgo(b.lastDownload)}.` : "Noch nie heruntergeladen.";
+  const dl = !b ? "" : b.lastDownload ? T("Zuletzt heruntergeladen: {when}.", { when: daysAgo(b.lastDownload) }) : T("Noch nie heruntergeladen.");
   const confirm = r ? `
     <div class="restore-confirm" role="alert">
-      <p><b>Sicherung vom ${esc(new Date(r.created).toLocaleString("de-DE", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }))}</b><br>
-      <span class="small">${r.decks} Stapel mit ${r.cards} Karten, dazu Lernstand, Themen und Verlauf.</span></p>
-      <p class="small">Das ersetzt alles, was jetzt in der App ist. Der jetzige Stand wird vorher im Sicherungsordner abgelegt, du kannst also zurück.</p>
+      <p><b>${T("Sicherung vom {d}", { d: esc(new Date(r.created).toLocaleString(LOCALE(), { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })) })}</b><br>
+      <span class="small">${T("{d} Stapel mit {c} Karten, dazu Lernstand, Themen und Verlauf.", { d: r.decks, c: r.cards })}</span></p>
+      <p class="small">${T("Das ersetzt alles, was jetzt in der App ist. Der jetzige Stand wird vorher im Sicherungsordner abgelegt, du kannst also zurück.")}</p>
       <div class="row-actions">
-        <button class="btn danger solid sm" data-act="restore-yes" ${r.busy ? "disabled" : ""}>${r.busy ? "Stelle wieder her …" : "Wiederherstellen"}</button>
-        <button class="btn ghost sm" data-act="restore-no" ${r.busy ? "disabled" : ""}>Abbrechen</button>
+        <button class="btn danger solid sm" data-act="restore-yes" ${r.busy ? "disabled" : ""}>${r.busy ? T("Stelle wieder her …") : T("Wiederherstellen")}</button>
+        <button class="btn ghost sm" data-act="restore-no" ${r.busy ? "disabled" : ""}>${T("Abbrechen")}</button>
       </div>
     </div>` : "";
   return `
   <section aria-labelledby="backup-h">
-    <div class="sec-head"><h2 id="backup-h">Daten sichern</h2></div>
+    <div class="sec-head"><h2 id="backup-h">${T("Daten sichern")}</h2></div>
     <div class="panel">
       <p class="small" style="margin:0">${auto}</p>
-      <p class="small" style="margin:0">Diese Kopien liegen auf demselben Computer. Lade ab und zu eine Sicherung herunter und lege sie woanders ab, z. B. auf einem USB-Stick oder in einem Cloud-Ordner. Sie enthält alle Stapel, deinen Lernstand und den Verlauf.</p>
+      <p class="small" style="margin:0">${T("Diese Kopien liegen auf demselben Computer. Lade ab und zu eine Sicherung herunter und lege sie woanders ab, z. B. auf einem USB-Stick oder in einem Cloud-Ordner. Sie enthält alle Stapel, deinen Lernstand und den Verlauf.")}</p>
       <div class="row-actions">
-        <button class="btn primary" data-act="backup-dl">Sicherung herunterladen</button>
-        <label class="btn ghost" for="file-restore">Aus Sicherung wiederherstellen</label>
+        <button class="btn primary" data-act="backup-dl">${T("Sicherung herunterladen")}</button>
+        <label class="btn ghost" for="file-restore">${T("Aus Sicherung wiederherstellen")}</label>
         <input class="sr" type="file" id="file-restore" accept=".json,application/json">
         ${dl ? `<span class="small ${stale ? "warn-text" : "muted"}">${dl}</span>` : ""}
       </div>
@@ -2721,7 +2802,7 @@ async function loadBackupStatus() {
 }
 async function downloadBackup() {
   await flush();
-  if (WQ.pending.size || state.save === "error") { toast("Erst muss alles gespeichert sein. Versuch es gleich noch einmal."); return; }
+  if (WQ.pending.size || state.save === "error") { toast(T("Erst muss alles gespeichert sein. Versuch es gleich noch einmal.")); return; }
   const a = document.createElement("a");
   a.href = "/api/backup"; a.download = ""; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(async () => { await loadBackupStatus(); render(); }, 800);
@@ -2729,8 +2810,8 @@ async function downloadBackup() {
 async function openRestore(file) {
   if (!file) return;
   let b;
-  try { b = JSON.parse(await readFileText(file)); } catch { toast("Die Datei ist keine gültige Sicherung."); return; }
-  if (!b || b.app !== "karteikasten" || !Array.isArray(b.docs) || !b.docs.length) { toast("Die Datei ist keine Karteikasten-Sicherung."); return; }
+  try { b = JSON.parse(await readFileText(file)); } catch { toast(T("Die Datei ist keine gültige Sicherung.")); return; }
+  if (!b || b.app !== "karteikasten" || !Array.isArray(b.docs) || !b.docs.length) { toast(T("Die Datei ist keine Karteikasten-Sicherung.")); return; }
   const data = b.docs.map(d => d?.data || {});
   state.restore = { docs: b.docs, created: b.created || file.lastModified, decks: data.filter(d => d.kind === "deck").length,
     cards: data.filter(d => d.kind === "chunk").reduce((a, d) => a + (Array.isArray(d.cards) ? d.cards.length : 0), 0), busy: false };
@@ -2745,40 +2826,40 @@ async function doRestore() {
   try {
     const res = await fetch("/api/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app: "karteikasten", format: 1, created: r.created, docs: r.docs }) });
     const out = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(out.error || "Wiederherstellen fehlgeschlagen.");
+    if (!res.ok) throw new Error(out.error || T("Wiederherstellen fehlgeschlagen."));
   } catch (e) {
     r.busy = false; render();
-    toast(e.message === "Failed to fetch" ? "Der Server antwortet nicht." : e.message); return;
+    toast(e.message === "Failed to fetch" ? T("Der Server antwortet nicht.") : e.message); return;
   }
   state.restore = null;
-  toast("Sicherung wiederhergestellt. Lade neu …");
+  toast(T("Sicherung wiederhergestellt. Lade neu …"));
   setTimeout(() => location.reload(), 700);
 }
 
 /* ---------- CSV export of one deck ---------- */
 function exportCSV(deck) {
   const cell = v => /[";\n\r]/.test(v) || /^\s|\s$/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-  const rows = [["Vorderseite", "Rückseite"], ...(state.cards[deck.id] || []).map(c => [c.f, c.b])];
+  const rows = [[T("Vorderseite"), T("Rückseite")], ...(state.cards[deck.id] || []).map(c => [c.f, c.b])];
   const text = "\uFEFF" + rows.map(r => r.map(cell).join(";")).join("\r\n") + "\r\n";
   const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
-  a.href = url; a.download = (deck.name.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Stapel") + ".csv";
+  a.href = url; a.download = (deck.name.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || T("Stapel")) + ".csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast((state.cards[deck.id] || []).length + " Karten als CSV exportiert. Der Lernstand ist darin nicht enthalten.");
+  toast(T("{n} Karten als CSV exportiert. Der Lernstand ist darin nicht enthalten.", { n: (state.cards[deck.id] || []).length }));
 }
 
 function howHTML() {
   return `
   <section class="how" aria-labelledby="how-h">
-    <h2 id="how-h">Wie die App entscheidet, was du lernst</h2>
+    <h2 id="how-h">${T("Wie die App entscheidet, was du lernst")}</h2>
     <ol>
-      <li><b>Jede Karte hat ein eigenes Gedächtnismodell.</b> Aus deinen Antworten schätzt die App, wie stabil du eine Karte kennst und wie schwer sie für dich ist.</li>
-      <li><b>Eine Karte kommt wieder, kurz bevor du sie vergisst.</b> Sobald die geschätzte Chance, dass du die Antwort noch weißt, auf dein Ziel fällt (Standard 90 %), wird sie fällig. Leichte Karten wandern weit nach hinten, schwere kommen schnell zurück.</li>
-      <li><b>Was am meisten wackelt, kommt zuerst.</b> Fällige Karten sind nach dieser Chance sortiert. Neue Karten werden in kleinen Mengen eingestreut, damit sich keine Berge an Wiederholungen aufstauen.</li>
-      <li><b>Neue und vergessene Karten werden kurz geübt.</b> Nach 1 und 10 Minuten kommen sie in derselben Runde wieder, bevor sie in den Abstand von Tagen gehen.</li>
+      <li>${T("<b>Jede Karte hat ein eigenes Gedächtnismodell.</b> Aus deinen Antworten schätzt die App, wie stabil du eine Karte kennst und wie schwer sie für dich ist.")}</li>
+      <li>${T("<b>Eine Karte kommt wieder, kurz bevor du sie vergisst.</b> Sobald die geschätzte Chance, dass du die Antwort noch weißt, auf dein Ziel fällt (Standard 90 %), wird sie fällig. Leichte Karten wandern weit nach hinten, schwere kommen schnell zurück.")}</li>
+      <li>${T("<b>Was am meisten wackelt, kommt zuerst.</b> Fällige Karten sind nach dieser Chance sortiert. Neue Karten werden in kleinen Mengen eingestreut, damit sich keine Berge an Wiederholungen aufstauen.")}</li>
+      <li>${T("<b>Neue und vergessene Karten werden kurz geübt.</b> Nach 1 und 10 Minuten kommen sie in derselben Runde wieder, bevor sie in den Abstand von Tagen gehen.")}</li>
     </ol>
-    <p class="muted small">Grundlage ist FSRS, ein offener, wissenschaftlich getesteter Wiederholungs-Algorithmus, den auch Anki verwendet. Aktiv: ${esc(ENGINE)}.</p>
+    <p class="muted small">${T("Grundlage ist FSRS, ein offener, wissenschaftlich getesteter Wiederholungs-Algorithmus, den auch Anki verwendet. Aktiv: {engine}.", { engine: esc(T(ENGINE)) })}</p>
   </section>`;
 }
 
@@ -2795,95 +2876,95 @@ function studyHTML() {
   const sizeF = front.length > 220 ? "xs" : front.length > 80 ? "sm" : "";
   const sizeB = back.length > 300 ? "xs" : "";
   let tag, info;
-  if (!st) { tag = "Neu"; info = "Zum ersten Mal"; }
-  else if (isLearning(st)) { tag = st.q === 3 ? "Wird neu gelernt" : "Lernphase"; info = "Zuletzt " + fmtAgo(now - st.last); }
-  else { const r = recall(st, now); tag = "Wiederholung"; info = "Zuletzt " + fmtAgo(now - st.last) + " · Chance jetzt " + pct(r); }
+  if (!st) { tag = T("Neu"); info = T("Zum ersten Mal"); }
+  else if (isLearning(st)) { tag = st.q === 3 ? T("Wird neu gelernt") : T("Lernphase"); info = T("Zuletzt {ago}", { ago: fmtAgo(now - st.last) }); }
+  else { const r = recall(st, now); tag = T("Wiederholung"); info = T("Zuletzt {ago}", { ago: fmtAgo(now - st.last) }) + " · " + T("Chance jetzt {p}", { p: pct(r) }); }
   const tagColor = !st ? "var(--new)" : isLearning(st) ? "var(--learn)" : "var(--rev)";
-  const dirNote = deck.dir === "b" ? (u.dir === "f" ? " · vorwärts" : " · rückwärts") : "";
+  const dirNote = deck.dir === "b" ? " · " + (u.dir === "f" ? T("vorwärts") : T("rückwärts")) : "";
   const flipTap = s.mode === "flip" && !s.revealed;
-  const lab = [["Nochmal", "--again"], ["Schwer", "--hard"], ["Gut", "--good"], ["Leicht", "--easy"]];
+  const lab = [1, 2, 3, 4].map(g => [T(GRADE[g]), GRADE_C[g]]);
   const sugg = s.answer?.suggest || 0;
   let actions = "", feedback = "";
   if (s.mode === "mc") {
     const correctN = normA(back);
-    feedback = `<div class="options" role="group" aria-label="Antwort wählen">${s.options.map((o, i) => {
+    feedback = `<div class="options" role="group" aria-label="${T("Antwort wählen")}">${s.options.map((o, i) => {
       const cls = s.revealed ? (normA(o) === correctN ? "right" : s.answer?.pick === i ? "wrong" : "") : "";
       return `<button class="opt ${cls}" data-act="choose" data-i="${i}" ${s.revealed ? "disabled" : ""}><kbd>${i + 1}</kbd><span>${esc(plain(o))}</span></button>`;
     }).join("")}</div>`;
-    if (!s.revealed) actions = `<div class="row-actions"><button class="linkish" data-act="dont-know">Weiß ich nicht</button></div>`;
+    if (!s.revealed) actions = `<div class="row-actions"><button class="linkish" data-act="dont-know">${T("Weiß ich nicht")}</button></div>`;
   } else if ((s.mode === "type" || s.mode === "self") && !s.revealed) {
     const long = !typeable(plain(back));
     actions = `<form class="answer-form" id="type-form" autocomplete="off">
-      <label class="sr" for="type-input">Deine Antwort</label>
+      <label class="sr" for="type-input">${T("Deine Antwort")}</label>
       ${long
-        ? `<textarea id="type-input" rows="3" placeholder="Antwort in eigenen Worten …" spellcheck="false" enterkeyhint="done" data-autofocus></textarea>`
-        : `<input type="text" id="type-input" placeholder="Antwort eintippen …" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" data-autofocus>`}
-      <button class="btn primary" type="submit">Prüfen</button>
-      <button class="linkish" type="button" data-act="dont-know">Weiß ich nicht</button>
+        ? `<textarea id="type-input" rows="3" placeholder="${T("Antwort in eigenen Worten …")}" spellcheck="false" enterkeyhint="done" data-autofocus></textarea>`
+        : `<input type="text" id="type-input" placeholder="${T("Antwort eintippen …")}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" data-autofocus>`}
+      <button class="btn primary" type="submit">${T("Prüfen")}</button>
+      <button class="linkish" type="button" data-act="dont-know">${T("Weiß ich nicht")}</button>
     </form>`;
   } else if ((s.mode === "type" || s.mode === "self") && s.answer) {
-    const a = s.answer, yours = a.given ? `<span>Deine Antwort: <q>${esc(a.given)}</q></span>` : "";
+    const a = s.answer, yours = a.given ? `<span>${T("Deine Antwort:")} <q>${esc(a.given)}</q></span>` : "";
     if (a.method === "keywords") {
-      const V = { right: ["Richtig", "--good"], close: ["Teilweise richtig", "--hard"], wrong: ["Zu wenig getroffen", "--again"], empty: ["Nicht beantwortet", "--muted"] }[a.verdict];
+      const V = { right: [T("Richtig"), "--good"], close: [T("Teilweise richtig"), "--hard"], wrong: [T("Zu wenig getroffen"), "--again"], empty: [T("Nicht beantwortet"), "--muted"] }[a.verdict];
       const n = a.found.length + a.missing.length;
       const chips = (list, cls) => list.map(k => `<span class="chip ${cls}">${esc(k.label)}</span>`).join("");
       feedback = `<div class="verdict" style="--c:var(${V[1]})">
-        <b>${V[0]} · ${a.found.length} von ${n} ${a.marked ? "markierten " : ""}Schlüsselbegriffen</b>
-        ${a.found.length ? `<div class="chips"><span class="chip-label">Getroffen</span>${chips(a.found, "hit")}</div>` : ""}
-        ${a.missing.length ? `<div class="chips"><span class="chip-label">Fehlt</span>${chips(a.missing, "miss")}</div>` : ""}
+        <b>${V[0]} · ${a.marked ? T("{a} von {b} markierten Schlüsselbegriffen", { a: a.found.length, b: n }) : T("{a} von {b} Schlüsselbegriffen", { a: a.found.length, b: n })}</b>
+        ${a.found.length ? `<div class="chips"><span class="chip-label">${T("Getroffen")}</span>${chips(a.found, "hit")}</div>` : ""}
+        ${a.missing.length ? `<div class="chips"><span class="chip-label">${T("Fehlt")}</span>${chips(a.missing, "miss")}</div>` : ""}
         ${yours}
-        <span class="muted small">Geprüft wird, ob die Begriffe vorkommen, nicht der Sinn. Passt der Vorschlag nicht, bewerte selbst.</span>
+        <span class="muted small">${T("Geprüft wird, ob die Begriffe vorkommen, nicht der Sinn. Passt der Vorschlag nicht, bewerte selbst.")}</span>
       </div>`;
     } else if (a.method === "self") {
-      feedback = `<div class="verdict" style="--c:var(--accent)"><b>${a.given ? "Vergleiche selbst" : "Nicht beantwortet"}</b>${yours}<span class="muted small">Die richtige Antwort steht auf der Karte. Bewerte, wie gut deine Antwort passt.</span></div>`;
+      feedback = `<div class="verdict" style="--c:var(--accent)"><b>${a.given ? T("Vergleiche selbst") : T("Nicht beantwortet")}</b>${yours}<span class="muted small">${T("Die richtige Antwort steht auf der Karte. Bewerte, wie gut deine Antwort passt.")}</span></div>`;
     } else {
-      const V = { right: ["Richtig", "--good"], close: ["Fast richtig", "--hard"], wrong: ["Nicht richtig", "--again"], empty: ["Nicht beantwortet", "--muted"] }[a.verdict];
+      const V = { right: [T("Richtig"), "--good"], close: [T("Fast richtig"), "--hard"], wrong: [T("Nicht richtig"), "--again"], empty: [T("Nicht beantwortet"), "--muted"] }[a.verdict];
       feedback = `<div class="verdict" style="--c:var(${V[1]})"><b>${V[0]}</b>${a.note ? `<span>${esc(a.note)}</span>` : ""}${yours}</div>`;
     }
   }
-  if (s.mode === "flip" && !s.revealed) actions = `<button class="btn primary wide" data-act="reveal" data-autofocus>Antwort zeigen <kbd>Leertaste</kbd></button>`;
+  if (s.mode === "flip" && !s.revealed) actions = `<button class="btn primary wide" data-act="reveal" data-autofocus>${T("Antwort zeigen")} <kbd>${T("Leertaste")}</kbd></button>`;
   if (s.revealed && s.editing) actions = "";
   else if (s.revealed) {
     const pv = previewFor(s), o = pv.o;
-    actions = `<div class="rates" role="group" aria-label="Wie gut wusstest du es?">${o.map((x, i) =>
-      `<button class="rate ${sugg === i + 1 ? "suggested" : ""}" style="--c:var(${lab[i][1]})" data-act="rate" data-g="${i + 1}" ${(sugg ? sugg === i + 1 : i === 2) ? "data-autofocus" : ""}>${sugg === i + 1 ? "<small>Vorschlag</small>" : ""}<b>${lab[i][0]}</b><span>${fmtDur(x.due - pv.now)} · ${i + 1}</span></button>`).join("")}</div>`;
+    actions = `<div class="rates" role="group" aria-label="${T("Wie gut wusstest du es?")}">${o.map((x, i) =>
+      `<button class="rate ${sugg === i + 1 ? "suggested" : ""}" style="--c:var(${lab[i][1]})" data-act="rate" data-g="${i + 1}" ${(sugg ? sugg === i + 1 : i === 2) ? "data-autofocus" : ""}>${sugg === i + 1 ? `<small>${T("Vorschlag")}</small>` : ""}<b>${lab[i][0]}</b><span>${fmtDur(x.due - pv.now)} · ${i + 1}</span></button>`).join("")}</div>`;
   }
   const hint = s.revealed
-    ? (sugg ? "Enter übernimmt den Vorschlag. Du kannst auch selbst bewerten." : "Ehrlich bewerten: Schwer heißt gewusst, aber mit Mühe.")
-    : s.mode === "mc" ? "Wähle mit 1–4 oder per Klick."
-    : s.mode === "self" ? "Schreib deine Antwort auf, Enter zeigt die Lösung zum Vergleich."
-    : s.mode === "type" && usesKeywords(back) ? "In eigenen Worten antworten. Geprüft wird, ob die Schlüsselbegriffe vorkommen. Enter prüft, Shift+Enter macht eine neue Zeile."
-    : s.mode === "type" ? "Tippe die Antwort und drücke Enter. Kleine Tippfehler sind okay." : "Erst selbst überlegen, dann Karte antippen.";
+    ? (sugg ? T("Enter übernimmt den Vorschlag. Du kannst auch selbst bewerten.") : T("Ehrlich bewerten: Schwer heißt gewusst, aber mit Mühe."))
+    : s.mode === "mc" ? T("Wähle mit 1–4 oder per Klick.")
+    : s.mode === "self" ? T("Schreib deine Antwort auf, Enter zeigt die Lösung zum Vergleich.")
+    : s.mode === "type" && usesKeywords(back) ? T("In eigenen Worten antworten. Geprüft wird, ob die Schlüsselbegriffe vorkommen. Enter prüft, Shift+Enter macht eine neue Zeile.")
+    : s.mode === "type" ? T("Tippe die Antwort und drücke Enter. Kleine Tippfehler sind okay.") : T("Erst selbst überlegen, dann Karte antippen.");
   return `
   <div class="study">
     <div class="study-bar">
-      <button class="btn ghost sm" data-act="exit">← Beenden</button>
+      <button class="btn ghost sm" data-act="exit">← ${T("Beenden")}</button>
       <div class="name">${esc(s.title)}${s.deckIds.length > 1 ? `<span class="set-note"> · ${esc(deck.name)}</span>` : ""}</div>
-      <div class="qcounts" aria-label="Noch in dieser Runde">
-        <span class="c-new">${cntNew}<small>neu</small></span>
-        <span class="c-learn">${cntLearn}<small>lernen</small></span>
-        <span class="c-rev">${cntRev}<small>fällig</small></span>
+      <div class="qcounts" aria-label="${T("Noch in dieser Runde")}">
+        <span class="c-new">${cntNew}<small>${T("neu")}</small></span>
+        <span class="c-learn">${cntLearn}<small>${T("lernen")}</small></span>
+        <span class="c-rev">${cntRev}<small>${T("fällig")}</small></span>
       </div>
     </div>
     <div class="progress" aria-hidden="true"><i style="width:${(prog * 100).toFixed(1)}%"></i></div>
     ${!s.revealed && !s.main.length && !s.offerOff ? (() => { const ds = s.deckIds.map(deckById).filter(Boolean); return extraOfferHTML(extraOffer(ds), ds, { inline: true }); })() : ""}
-    ${s.stamp && !s.revealed ? `<div class="stamp ${s.stamp.kind}" role="status"><b>${esc(s.stamp.title)}</b><span>Letzte Karte: ${esc(s.stamp.text)}</span></div>` : ""}
-    <article class="card ${flipTap ? "tap" : ""} ${topicOfDeck(deck) ? "has-subject" : ""}" style="${topicOfDeck(deck) ? `--fc:${topicColor(topicOfDeck(deck))}` : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
+    ${s.stamp && !s.revealed ? `<div class="stamp ${s.stamp.kind}" role="status"><b>${esc(s.stamp.title)}</b><span>${T("Letzte Karte:")} ${esc(s.stamp.text)}</span></div>` : ""}
+    <article class="card ${flipTap ? "tap" : ""} ${topicOfDeck(deck) ? "has-subject" : ""}" style="${topicOfDeck(deck) ? `--fc:${topicColor(topicOfDeck(deck))}` : ""}" aria-live="polite" ${flipTap ? `data-act="reveal" title="${T("Antippen zum Aufdecken")}"` : ""}>
       <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span>${topicOfDeck(deck) && !s.topicId ? `<span class="subject-chip" style="--fc:${topicColor(topicOfDeck(deck))}">${esc(topicOfDeck(deck).name)}</span>` : ""}<span>${esc(info)}</span></div>
       ${s.editing ? `<div class="ce-row editing">${cardFormHTML("st", u.card.f, u.card.b, "", "st-save", "")}</div>` : `
       <div class="face front ${sizeF}"><span>${richText(front)}</span></div>
       ${s.revealed ? `<div class="face back ${sizeB}">${s.answer?.method === "keywords" ? highlightAnswer(back, s.answer) : richText(back)}</div>` : ""}`}
     </article>
-    ${s.revealed && !s.editing && isLeech(u.card) ? `<div class="leech-note" role="note"><b>Problemkarte: schon ${lapsesOf(u.card)}× vergessen.</b> <span>Oft liegt es an der Karte, nicht an dir. Kürzer formulieren oder aufteilen hilft meist.</span>
-      <span class="row-actions"><button class="btn ghost sm" data-act="st-edit">Bearbeiten</button><button class="btn ghost sm" data-act="st-susp">Aussetzen</button></span></div>` : ""}
+    ${s.revealed && !s.editing && isLeech(u.card) ? `<div class="leech-note" role="note"><b>${T("Problemkarte: schon {n}× vergessen.", { n: lapsesOf(u.card) })}</b> <span>${T("Oft liegt es an der Karte, nicht an dir. Kürzer formulieren oder aufteilen hilft meist.")}</span>
+      <span class="row-actions"><button class="btn ghost sm" data-act="st-edit">${T("Bearbeiten")}</button><button class="btn ghost sm" data-act="st-susp">${T("Aussetzen")}</button></span></div>` : ""}
     ${feedback}
     ${s.revealed ? historyHTML(u, s.answer) : ""}
     ${actions}
     <div class="study-foot">
       <span>${hint}</span>
       <span class="foot-links">
-        ${s.revealed && !s.editing ? `<button class="linkish" data-act="st-edit">Karte bearbeiten (E)</button>` : ""}
-        <button class="linkish" data-act="undo" ${s.history.length ? "" : "disabled"}>Letzte Bewertung rückgängig (Z)</button>
+        ${s.revealed && !s.editing ? `<button class="linkish" data-act="st-edit">${T("Karte bearbeiten (E)")}</button>` : ""}
+        <button class="linkish" data-act="undo" ${s.history.length ? "" : "disabled"}>${T("Letzte Bewertung rückgängig (Z)")}</button>
       </span>
     </div>
   </div>`;
@@ -2905,15 +2986,15 @@ function doneHTML(s) {
   <div class="study">
     <div class="panel done">
       <p class="eyebrow">${esc(s.title)}</p>
-      <p class="big">Für heute geschafft.</p>
-      <p>${firsts.length} ${firsts.length === 1 ? "Karte" : "Karten"} in ${mins} Min. Beim ersten Versuch gewusst: <b>${pct(ok)}</b>.</p>
-      ${up || down ? `<p>${up} ${up === 1 ? "Karte" : "Karten"} in ein höheres Fach gerückt${down ? `, ${down} zurückgefallen` : ""}. ${(() => { const p = progressOf(decks); return `Fortschritt ${!many ? "im Stapel" : s.topicId ? "im Thema" : "insgesamt"}: <b>${p.pct} %</b>${p.tier ? ` (${p.tier.name})` : ""}.`; })()}</p>` : ""}
-      ${s.badges.length ? `<p>Neue Abzeichen: <b>${s.badges.map(b => esc(b.name)).join(", ")}</b>.</p>` : ""}
-      <p>${(() => { const st = streakInfo(); return st.todayOk ? `Tagesziel erreicht (${st.today}/${state.profile.goal}). Serie: <b>${st.n} ${st.n === 1 ? "Tag" : "Tage"}</b>.` : `Tagesziel: ${st.today}/${state.profile.goal} Antworten. Noch ${state.profile.goal - st.today} in einem anderen Stapel, oder hol dir 10 neue Karten.`; })()}</p>
+      <p class="big">${T("Für heute geschafft.")}</p>
+      <p>${Tn(firsts.length, "{n} Karte in {m} Min.", "{n} Karten in {m} Min.", { m: mins })} ${T("Beim ersten Versuch gewusst:")} <b>${pct(ok)}</b>.</p>
+      ${up || down ? `<p>${Tn(up, "{n} Karte in ein höheres Fach gerückt", "{n} Karten in ein höheres Fach gerückt")}${down ? ", " + T("{n} zurückgefallen", { n: down }) : ""}. ${(() => { const p = progressOf(decks); return `${!many ? T("Fortschritt im Stapel:") : s.topicId ? T("Fortschritt im Thema:") : T("Fortschritt insgesamt:")} <b>${pctN(p.pct)}</b>${p.tier ? ` (${T(p.tier.name)})` : ""}.`; })()}</p>` : ""}
+      ${s.badges.length ? `<p>${T("Neue Abzeichen:")} <b>${s.badges.map(b => esc(T(b.name))).join(", ")}</b>.</p>` : ""}
+      <p>${(() => { const st = streakInfo(); return st.todayOk ? `${T("Tagesziel erreicht ({a}/{b}).", { a: st.today, b: state.profile.goal })} ${T("Serie:")} <b>${Tn(st.n, "{n} Tag", "{n} Tage")}</b>.` : T("Tagesziel: {a}/{b} Antworten. Noch {c} in einem anderen Stapel, oder hol dir 10 neue Karten.", { a: st.today, b: state.profile.goal, c: state.profile.goal - st.today }); })()}</p>
       ${extraOfferHTML(extraOffer(decks), decks)}
-      <p class="muted">Morgen warten etwa ${tomorrow} Wiederholungen${newTomorrow > 0 ? ` und bis zu ${newTomorrow} neue Karten` : ""}. Am meisten bringt es, jeden Tag kurz zu lernen.</p>
+      <p class="muted">${newTomorrow > 0 ? T("Morgen warten etwa {r} Wiederholungen und bis zu {n} neue Karten.", { r: tomorrow, n: newTomorrow }) : T("Morgen warten etwa {r} Wiederholungen.", { r: tomorrow })} ${T("Am meisten bringt es, jeden Tag kurz zu lernen.")}</p>
       <div class="row-actions">
-        <button class="btn primary" data-act="exit" data-autofocus>Zur Übersicht</button>
+        <button class="btn primary" data-act="exit" data-autofocus>${T("Zur Übersicht")}</button>
 
       </div>
     </div>
@@ -2959,8 +3040,8 @@ let olTimer = 0;
 function refreshOutlineInfo() {
   const te = state.topicEdit; if (!te) return;
   const tt = draftTree(te), stats = tt.root ? treeStats(tt) : new Map();
-  document.querySelectorAll(".ol-count").forEach(el => { const st = stats.get(el.dataset.nid); el.textContent = st ? `${st.cards} ${st.cards === 1 ? "Karte" : "Karten"}` : ""; });
-  const sum = $("#ol-summary"); if (sum && tt.root) sum.textContent = `${tt.assign.size} von ${tt.entries.length} Karten zugeordnet`;
+  document.querySelectorAll(".ol-count").forEach(el => { const st = stats.get(el.dataset.nid); el.textContent = st ? Tn(st.cards, "{n} Karte", "{n} Karten") : ""; });
+  const sum = $("#ol-summary"); if (sum && tt.root) sum.textContent = T("{a} von {b} Karten zugeordnet", { a: tt.assign.size, b: tt.entries.length });
   const box = $("#ol-suggs"); if (box) box.innerHTML = suggestionsHTML(te);
 }
 const cloneOutline = o => o ? JSON.parse(JSON.stringify(o)) : { title: "", children: [] };
@@ -2975,14 +3056,15 @@ function treePreviewText(text) {
   const root = parseTree(text);
   if (!root) return "";
   const leaves = treeLeaves(root).filter(l => l !== root);
-  return `Erkannt: ${root.children.length} Hauptzweige, ${leaves.length} Unterthemen.`;
+  return T("Erkannt: {a} Hauptzweige, {b} Unterthemen.", { a: root.children.length, b: leaves.length });
 }
 
 /* ---------- Events ---------- */
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
-  if (act === "study") startStudy(id, b.dataset.extra === "1");
+  if (act === "ui-settings") { state.uiOpen = !state.uiOpen; render(); if (state.uiOpen) $("#ui-h")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+  else if (act === "study") startStudy(id, b.dataset.extra === "1");
   else if (act === "study-topic") startTopic(id, b.dataset.extra === "1");
   else if (act === "extra-new") addExtraNew();
   else if (act === "home") { setHome(id); state.open = null; render(); window.scrollTo({ top: 0 }); }
@@ -2991,8 +3073,8 @@ document.addEventListener("click", e => {
   else if (act === "topic-archive") {
     const t = topicById(id); if (!t) return;
     t.archived = !t.archived; saveTopics();
-    if (t.archived) { if (state.home === id) setHome("today"); toast(`„${t.name}“ ist im Archiv. Es zählt nicht mehr zu „heute“, der Lernstand bleibt.`); }
-    else { setHome(id); toast(`„${t.name}“ ist zurück.`); }
+    if (t.archived) { if (state.home === id) setHome("today"); toast(T("„{name}“ ist im Archiv. Es zählt nicht mehr zu „heute“, der Lernstand bleibt.", { name: t.name })); }
+    else { setHome(id); toast(T("„{name}“ ist zurück.", { name: t.name })); }
     render();
   }
   else if (act === "extra-no") { if (state.session) { state.session.offerOff = true; render(); } }
@@ -3004,7 +3086,7 @@ document.addEventListener("click", e => {
     else if (act === "ol-text") { te.textOpen = !te.textOpen; render(); $("#topic-tree")?.focus(); }
     else if (act === "ol-text-apply") {
       const o = outlineFromText(te.pasteText);
-      if (!o) { toast("Im Text wurde keine Gliederung erkannt."); return; }
+      if (!o) { toast(T("Im Text wurde keine Gliederung erkannt.")); return; }
       te.outline = o; te.textOpen = false; te.pasteText = ""; render();
     }
     else if (act === "ol-sugg") {
@@ -3012,7 +3094,7 @@ document.addEventListener("click", e => {
       const n = { id: rid(), label: sg.label, children: [] };
       const target = sg.parentId && findNode(te.outline.children, sg.parentId);
       (target ? target.node.children : te.outline.children).push(n);
-      toast(`Zweig „${sg.label}“ hinzugefügt${target ? ` unter „${target.node.label}“` : ""}.`);
+      toast(target ? T("Zweig „{a}“ hinzugefügt unter „{b}“.", { a: sg.label, b: target.node.label }) : T("Zweig „{a}“ hinzugefügt.", { a: sg.label }));
       state.focusNid = n.id; render();
     }
     else outlineOp(act.slice(3), nid);
@@ -3020,7 +3102,7 @@ document.addEventListener("click", e => {
   else if (act === "tree-toggle") { const k = b.dataset.k; state.treeExpanded.has(k) ? state.treeExpanded.delete(k) : state.treeExpanded.add(k); render(); }
   else if (act === "pin") {
     pinCard(b.dataset.tid, b.dataset.cid, b.dataset.to);
-    toast(`Karte festgelegt: „${b.textContent.trim()}“.`); render();
+    toast(T("Karte festgelegt: „{name}“.", { name: b.textContent.trim() })); render();
   }
   else if (act === "topic-tree") { state.treeOpen = state.treeOpen === id ? null : id; if (state.topicEdit?.id === id) state.topicEdit = null; render(); }
   else if (act === "topic-cancel") { state.topicEdit = null; render(); }
@@ -3030,11 +3112,11 @@ document.addEventListener("click", e => {
     const tid = state.topicEdit.id;
     for (const d of decksOfTopic(tid)) { d.topic = null; markMeta(d); }
     state.topics = state.topics.filter(t => t.id !== tid); saveTopics();
-    state.topicEdit = null; toast("Thema gelöscht. Die Kartensets sind jetzt unter „Ohne Thema“."); render();
+    state.topicEdit = null; toast(T("Thema gelöscht. Die Kartensets sind jetzt unter „Ohne Thema“.")); render();
   }
   else if (act === "topic-save") {
     const te = state.topicEdit, name = (te.name || "").trim().slice(0, 80);
-    if (!name) { toast("Gib dem Thema einen Namen."); $("#topic-name")?.focus(); return; }
+    if (!name) { toast(T("Gib dem Thema einen Namen.")); $("#topic-name")?.focus(); return; }
     let t = te.id && topicById(te.id);
     if (t) t.name = name; else { t = { id: rid(), name, created: Date.now() }; state.topics.push(t); setHome(t.id); }
     t.color = te.color ?? t.color ?? nextColor();
@@ -3045,7 +3127,7 @@ document.addEventListener("click", e => {
       if ((d.topic || null) !== (want || null)) { d.topic = want; markMeta(d); }
     }
     saveTopics(); state.lastTopic = t.id; state.topicEdit = null;
-    toast(te.id ? "Thema gespeichert." : `Thema „${name}“ angelegt.`); render();
+    toast(te.id ? T("Thema gespeichert.") : T("Thema „{name}“ angelegt.", { name })); render();
   }
   else if (act === "tab") {
     const same = state.open?.id === id && state.open.tab === b.dataset.tab;
@@ -3063,7 +3145,7 @@ document.addEventListener("click", e => {
   else if (act === "sample") loadSample();
   else if (act === "paste-open") { state.pasteOpen = true; render(); $("#paste-text")?.focus(); }
   else if (act === "paste-cancel") { state.pasteOpen = false; render(); }
-  else if (act === "paste-go") { const t = $("#paste-text")?.value || ""; if (t.trim()) openImportText(t, "Eingefügter Text"); else toast("Füge zuerst Text ein."); }
+  else if (act === "paste-go") { const t = $("#paste-text")?.value || ""; if (t.trim()) openImportText(t, T("Eingefügter Text")); else toast(T("Füge zuerst Text ein.")); }
   else if (act === "del") { state.confirmDelete = id; render(); }
   else if (act === "del-no") { state.confirmDelete = null; render(); }
   else if (act === "del-yes") {
@@ -3071,7 +3153,7 @@ document.addEventListener("click", e => {
     for (const k of [...WQ.pending.keys()]) if (k.includes(":" + id)) WQ.pending.delete(k);
     queueWrite("x:" + id, () => state.store.delDeck(id, chunks), 0);
     state.decks = state.decks.filter(d => d.id !== id); delete state.cards[id];
-    state.confirmDelete = null; state.open = null; toast("Stapel gelöscht."); render();
+    state.confirmDelete = null; state.open = null; toast(T("Stapel gelöscht.")); render();
   }
   else if (act?.startsWith("cl-")) {
     const cl = state.cardList, deck = deckById(id || state.open?.id), c = deck && (state.cards[deck.id] || []).find(x => x.i === b.dataset.cid);
@@ -3084,7 +3166,7 @@ document.addEventListener("click", e => {
       const nc = { i: rid(), f: "", b: "", sf: null, sr: null, c: 0, x: false };
       if (!saveCardText(deck, nc, $("#ce-new-f")?.value, $("#ce-new-b")?.value)) return;
       state.cards[deck.id].push(nc); assignChunks(deck);
-      toast("Karte hinzugefügt. Sie kommt als neue Karte dran.");
+      toast(T("Karte hinzugefügt. Sie kommt als neue Karte dran."));
       render(); $("#ce-new-f")?.focus(); return; // form stays open for the next card
     }
     else if (act === "cl-edit") { cl.edit = b.dataset.cid; cl.confirmDel = null; cl.adding = false; }
@@ -3092,14 +3174,14 @@ document.addEventListener("click", e => {
     else if (act === "cl-save" && c) {
       if (!saveCardText(deck, c, $("#ce-f")?.value, $("#ce-b")?.value)) return;
       if ($("#ce-reset")?.checked) { c.sf = null; c.sr = null; }
-      markChunk(deck, c.c); cl.edit = null; toast("Karte gespeichert.");
+      markChunk(deck, c.c); cl.edit = null; toast(T("Karte gespeichert."));
     }
-    else if (act === "cl-susp" && c) { setSuspended(deck, c, !c.x); toast(c.x ? "Karte ausgesetzt." : "Karte wird wieder abgefragt."); }
+    else if (act === "cl-susp" && c) { setSuspended(deck, c, !c.x); toast(c.x ? T("Karte ausgesetzt.") : T("Karte wird wieder abgefragt.")); }
     else if (act === "cl-del") { cl.confirmDel = b.dataset.cid; cl.edit = null; }
     else if (act === "cl-del-no") cl.confirmDel = null;
     else if (act === "cl-del-yes" && c) {
       state.cards[deck.id] = state.cards[deck.id].filter(x => x !== c); cardsRev++; SYNC.deleted.add(c.i);
-      assignChunks(deck); cl.confirmDel = null; toast("Karte gelöscht.");
+      assignChunks(deck); cl.confirmDel = null; toast(T("Karte gelöscht."));
     }
     render();
     if (act === "cl-edit") focusEnd("#ce-f");
@@ -3110,7 +3192,7 @@ document.addEventListener("click", e => {
   else if (act === "st-save") {
     const s = state.session, u = s?.current; if (!u) return;
     if (!saveCardText(u.deck, u.card, $("#st-f")?.value, $("#st-b")?.value)) return;
-    markChunk(u.deck, u.card.c); s.editing = false; toast("Karte gespeichert."); render();
+    markChunk(u.deck, u.card.c); s.editing = false; toast(T("Karte gespeichert.")); render();
   }
   else if (act === "st-susp") suspendCurrent();
   else if (act === "backup-dl") downloadBackup();
@@ -3124,6 +3206,8 @@ document.addEventListener("change", e => {
   else if (t.id?.startsWith("file-add-")) { openImport(t.files[0], t.dataset.id); t.value = ""; }
   else if (t.id === "file-restore") { openRestore(t.files[0]); t.value = ""; }
   else if (t.name === "topic-color" && state.topicEdit) state.topicEdit.color = +t.value;
+  else if (t.name === "ui-theme") setTheme(t.value);
+  else if (t.name === "ui-lang") { setLang(t.value); render(); $(`input[name="ui-lang"][value="${t.value}"]`)?.focus(); }
   else if (t.id === "cl-filter") { state.cardList.filter = t.value; state.cardList.limit = 50; state.cardList.edit = null; render(); $("#cl-filter")?.focus(); }
   else if (t.id === "imp-f" && d) { d.fc = +t.value; render(); }
   else if (t.id === "imp-b" && d) { d.bc = +t.value; render(); }
@@ -3132,8 +3216,8 @@ document.addEventListener("change", e => {
   else if (t.id === "set-new") { const deck = deckById(t.dataset.id); deck.newPerDay = Math.max(0, Math.min(500, Math.round(+t.value || 0))); markMeta(deck); render(); }
   else if (t.classList?.contains("reassign")) {
     pinCard(t.dataset.tid, t.dataset.cid, t.value);
-    const name = t.value === "auto" ? "automatische Zuordnung" : t.value === "none" ? "keinem Zweig" : `„${t.selectedOptions[0].textContent.trim()}“`;
-    toast(`Karte zugeordnet: ${name}.`); render();
+    const name = t.value === "auto" ? T("automatische Zuordnung") : t.value === "none" ? T("keinem Zweig") : `„${t.selectedOptions[0].textContent.trim()}“`;
+    toast(T("Karte zugeordnet: {name}.", { name })); render();
   }
   else if (t.id === "set-topic") { const deck = deckById(t.dataset.id); deck.topic = t.value || null; markMeta(deck); render(); }
   else if (t.id === "imp-topic" && d) { d.topic = t.value; state.lastTopic = t.value; }
@@ -3157,7 +3241,7 @@ document.addEventListener("input", e => {
     const f = findNode(state.topicEdit.outline.children, t.dataset.nid);
     if (f) { f.node.label = t.value; clearTimeout(olTimer); olTimer = setTimeout(refreshOutlineInfo, 350); }
   }
-  if (t.id === "set-ret") { const o = $("#ret-out"); if (o) o.textContent = t.value + " %"; }
+  if (t.id === "set-ret") { const o = $("#ret-out"); if (o) o.textContent = pctN(t.value); }
   if (t.id === "cl-q") { const deck = deckById(t.dataset.id); state.cardList.q = t.value; state.cardList.limit = 50; state.cardList.edit = null; state.cardList.confirmDel = null; if (deck) refreshCardList(deck); }
 });
 document.addEventListener("dragover", e => { if (state.view !== "home") return; e.preventDefault(); $("#drop")?.classList.add("over"); });
@@ -3173,7 +3257,7 @@ document.addEventListener("paste", e => {
   if (e.target.matches?.("input,textarea,select,[contenteditable]")) return;
   const t = e.clipboardData?.getData("text/plain") || "";
   if (!/[\t;,|]/.test(t) || !t.trim()) return;
-  e.preventDefault(); openImportText(t, "Eingefügter Text");
+  e.preventDefault(); openImportText(t, T("Eingefügter Text"));
 });
 document.addEventListener("keydown", e => {
   const t = e.target;
@@ -3204,6 +3288,327 @@ document.addEventListener("keydown", e => {
   if ((e.key === "e" || e.key === "E") && !s.editing) { e.preventDefault(); s.editing = true; render(); focusEnd("#st-f"); }
 });
 
+/* ---------- English texts ----------
+   Key: the German text exactly as in T() / Tn(), value: the English version with the same {placeholders}.
+   var instead of const, so T() can check for it before this line has run. */
+var EN = {
+  // Units and times
+  "{n} Min": "{n} min", "{n} Std": "{n} h", "{n} Mon.": "{n} mo", "{n} J.": "{n} yr",
+  "{n} Tag": "{n} day", "{n} Tage": "{n} days",
+  "vor {n} Min": "{n} min ago", "vor {n} Std": "{n} h ago", "gestern": "yesterday", "vor {n} Tagen": "{n} days ago",
+  "heute": "today", "Heute": "Today",
+
+  // Grades, boxes, tiers, badges, delimiters, scheduler (data lists translated where they are shown)
+  "Nochmal": "Again", "Schwer": "Hard", "Gut": "Good", "Leicht": "Easy",
+  "Neu": "New", "noch nie gesehen": "never seen",
+  "Fach 1": "Box 1", "unter 1 Tag": "under 1 day",
+  "Fach 2": "Box 2", "1–7 Tage": "1–7 days",
+  "Fach 3": "Box 3", "1–3 Wochen": "1–3 weeks",
+  "Fach 4": "Box 4", "3 Wochen bis 3 Monate": "3 weeks to 3 months",
+  "Fach 5": "Box 5", "über 3 Monate": "over 3 months",
+  "Gold": "Gold", "Silber": "Silver", "Bronze": "Bronze",
+  "Erster Schritt": "First step", "Beantworte deine erste Karte.": "Answer your first card.",
+  "Dranbleiben": "Keep going", "Erreiche 3 Tage in Folge dein Tagesziel.": "Reach your daily goal 3 days in a row.",
+  "Eine Woche": "One week", "Erreiche 7 Tage in Folge dein Tagesziel.": "Reach your daily goal 7 days in a row.",
+  "Ein Monat": "One month", "Erreiche 30 Tage in Folge dein Tagesziel.": "Reach your daily goal 30 days in a row.",
+  "Comeback": "Comeback", "Lerne wieder nach mindestens 3 Tagen Pause.": "Study again after a break of at least 3 days.",
+  "Alles erledigt": "All done", "Arbeite an einem Tag alles Fällige in allen Stapeln ab.": "Clear everything due in all decks in one day.",
+  "Ausdauer": "Stamina", "Gib 50 Antworten an einem Tag.": "Give 50 answers in one day.",
+  "Hundert": "Hundred", "Gib insgesamt 100 Antworten.": "Give 100 answers in total.",
+  "Fünfhundert": "Five hundred", "Gib insgesamt 500 Antworten.": "Give 500 answers in total.",
+  "Tausend": "Thousand", "Gib insgesamt 1.000 Antworten.": "Give 1,000 answers in total.",
+  "Alles gesehen": "Seen it all", "Lerne jede Karte eines Stapels mindestens einmal.": "Study every card of a deck at least once.",
+  "Gefestigt": "Solid", "Bring eine Karte in Fach 4 (sitzt mindestens 3 Wochen).": "Get a card into box 4 (sticks for at least 3 weeks).",
+  "Langzeitgedächtnis": "Long-term memory", "Bring eine Karte in Fach 5 (sitzt über 3 Monate).": "Get a card into box 5 (sticks for over 3 months).",
+  "Erreiche 25 % Fortschritt in einem Stapel.": "Reach 25% progress in a deck.",
+  "Erreiche 50 % Fortschritt in einem Stapel.": "Reach 50% progress in a deck.",
+  "Erreiche 75 % Fortschritt in einem Stapel.": "Reach 75% progress in a deck.",
+  "Tabulator": "tab", "Semikolon": "semicolon", "Komma": "comma", "senkrechter Strich": "vertical bar",
+  "FSRS-6 über die offizielle Bibliothek ts-fsrs": "FSRS-6 via the official ts-fsrs library",
+  "FSRS-5 (eingebaute Version, ts-fsrs fehlt: einmal npm install ausführen)": "FSRS-5 (built-in version, ts-fsrs is missing: run npm install once)",
+
+  // Saving and syncing
+  "Der Speicher dieses Browsers ist voll.": "This browser's storage is full.",
+  "Zwei Geräte haben gleichzeitig gespeichert und das Zusammenführen hat nicht geklappt. Lade die Seite neu.": "Two devices saved at the same time and merging did not work. Reload the page.",
+  "Speicher voll: {msg}": "Storage full: {msg}",
+  "Lösche einen Stapel, um Platz zu schaffen.": "Delete a deck to free up space.",
+  "Der Server antwortet nicht. Läuft er noch? Dein Fortschritt seit dem letzten Speichern ist nur in diesem Tab.": "The server is not responding. Is it still running? Your progress since the last save is only in this tab.",
+  "Speichern fehlgeschlagen. Dein Fortschritt seit dem letzten Speichern ist nur in diesem Tab.": "Saving failed. Your progress since the last save is only in this tab.",
+  "Auf einem anderen Gerät wurde gleichzeitig gelernt. Beide Stände sind zusammengeführt.": "Someone studied on another device at the same time. Both versions have been merged.",
+  "Neuer Stand von einem anderen Gerät übernommen.": "Picked up changes from another device.",
+  "Gespeichert auf diesem Computer": "Saved on this computer",
+  "Server nicht gefunden, nur in diesem Browser gespeichert": "Server not found, saved in this browser only",
+  "Wird nicht gespeichert (Browser blockiert Speicher)": "Not saved (the browser blocks storage)",
+  "speichert …": "saving …", "Speichern fehlgeschlagen": "saving failed", "aktuell": "up to date",
+  "Lade deine Stapel …": "Loading your decks …",
+  "Der Karteikasten-Server antwortet nicht. Prüfe im Terminal, ob er noch läuft (npm start), und lade die Seite neu.": "The Karteikasten server is not responding. Check in the terminal that it is still running (npm start), then reload the page.",
+  "Deine Stapel konnten nicht geladen werden.": "Your decks could not be loaded.",
+
+  // Header and settings
+  "Lade eine CSV-Datei hoch und lerne täglich ein paar Minuten. Die App zeigt dir jede Karte kurz bevor du sie vergessen würdest.": "Upload a CSV file and study a few minutes a day. The app shows you each card just before you would forget it.",
+  "Datum:": "Date:",
+  "Einstellungen": "Settings", "Schließen": "Close", "Darstellung": "Appearance",
+  "Wie das System": "Same as system", "Hell": "Light", "Dunkel": "Dark",
+  "Gilt für dieses Gerät. Deine Karten bleiben, wie sie sind, nur die Oberfläche wechselt die Sprache.": "Applies to this device. Your cards stay as they are, only the app's own text changes language.",
+
+  // Overview, subjects, tabs
+  "Themen": "Subjects", "Neues Thema": "New subject", "Ohne Thema": "No subject", "Archiv": "Archive",
+  "Themen im Archiv ruhen: Sie zählen nicht zu „heute“ und nicht zu „Alles lernen“. Ihr Lernstand bleibt erhalten, und du kannst sie jederzeit auffrischen oder zurückholen.": "Archived subjects are resting: they don't count toward “today” or “Study everything”. Their progress is kept, and you can refresh or restore them at any time.",
+  "Lernen": "Study", "{n} fällig": "{n} due", "{n} neu": "{n} new", "{n} Set": "{n} set", "{n} Sets": "{n} sets",
+  "{n} Karte": "{n} card", "{n} Karten": "{n} cards",
+  "Die heutigen neuen Karten sitzen schon gut": "Today's new cards are already sticking well",
+  "{n} weitere neue": "{n} more new", "Für heute fertig": "Done for today", "{p} Fortschritt": "{p} progress",
+  "Deine Themen heute": "Your subjects today",
+  "Heute: {n} Karte, etwa {m} Min.": "Today: {n} card, about {m} min.", "Heute: {n} Karten, etwa {m} Min.": "Today: {n} cards, about {m} min.",
+  "Für heute ist alles erledigt.": "Everything is done for today.",
+  "{d} fällig, {f} neu. Thema für Thema, damit du nicht ständig umdenken musst.": "{d} due, {f} new. One subject at a time, so you don't keep switching your head.",
+  "Morgen geht es weiter. Im Archiv kannst du alte Themen auffrischen.": "More tomorrow. You can refresh old subjects in the archive.",
+  "Alles lernen": "Study everything", "Alles für heute": "Everything for today",
+  "ruht, zählt nicht zu „heute“": "resting, doesn't count toward “today”", "Ansehen": "View",
+  "im Archiv": "archived", "Auffrischen": "Refresh", "Thema lernen": "Study subject", "Themenbaum": "Topic tree",
+  "Bearbeiten": "Edit", "Zurückholen": "Restore", "Archivieren": "Archive",
+  "Noch keine Kartensets. Ordne sie unter „Bearbeiten“ zu.": "No card sets yet. Assign them under “Edit”.",
+  "„{name}“ ist im Archiv. Es zählt nicht mehr zu „heute“, der Lernstand bleibt.": "“{name}” is archived. It no longer counts toward “today”, its progress is kept.",
+  "„{name}“ ist zurück.": "“{name}” is back.",
+
+  // Daily goal and streak
+  "Antworten heute": "answers today", "Tagesziel": "Daily goal", "{n} Antworten": "{n} answers",
+  "{n} Antwort": "{n} answer",
+  "Erreiche heute dein Ziel, um eine Serie zu starten.": "Reach your goal today to start a streak.",
+  "Serie, heute geschafft.": "streak, done for today.",
+  "Serie. Heute noch {n} Antwort, dann hält sie.": "streak. {n} more answer today to keep it.",
+  "Serie. Heute noch {n} Antworten, dann hält sie.": "streak. {n} more answers today to keep it.",
+  "Tagesziel der letzten 7 Tage": "Daily goal over the last 7 days",
+  "<b>{n}</b> neue Karten angefangen": "<b>{n}</b> new cards started", "<b>{n}</b> gelernt": "<b>{n}</b> learned",
+  "<b>{n}</b> eine Stufe weiter": "<b>{n}</b> moved up a stage", "Heute: {list}.": "Today: {list}.",
+  "Tagesziel erreicht. Serie: {days}.": "Daily goal reached. Streak: {days}.",
+
+  // Import
+  "CSV-Datei hierher ziehen oder Tabelle einfügen": "Drop a CSV file here or paste a table",
+  "Spalte 1 = Vorderseite, Spalte 2 = Rückseite. Komma, Semikolon und Tab werden erkannt. Mit *Sternchen* markierst du Schlüsselbegriffe in langen Antworten. Du kannst auch Zeilen aus Excel, Google Sheets, Notion oder Quizlet kopieren und hier einfügen.": "Column 1 = front, column 2 = back. Commas, semicolons and tabs are recognised. Mark key terms in long answers with *asterisks*. You can also copy rows from Excel, Google Sheets, Notion or Quizlet and paste them here.",
+  "Datei auswählen": "Choose file", "Text einfügen": "Paste text", "Neuer Stapel": "New deck",
+  "Eine Karte pro Zeile. Vorder- und Rückseite durch Tab, Semikolon oder Komma trennen. Aus Tabellen kopierte Zeilen passen direkt.": "One card per line. Separate front and back with a tab, semicolon or comma. Rows copied from spreadsheets work as they are.",
+  "der Apfel;la manzana&#10;das Haus;la casa&#10;der Hund;el perro": "the apple;la manzana&#10;the house;la casa&#10;the dog;el perro",
+  "Weiter zur Vorschau": "Continue to preview", "Abbrechen": "Cancel",
+  "Spalte {n}": "Column {n}", "vorne": "front", "hinten": "back", "Stapel ergänzen": "Add to deck",
+  "{n} Zeilen erkannt, Trennzeichen: {d}.": "{n} rows found, separator: {d}.",
+  "Karten mit gleicher Vorderseite werden aktualisiert, dein Lernstand bleibt.": "Cards with the same front are updated, your progress stays.",
+  "Die Datei hat nur eine Spalte. Jede Zeile braucht Vorderseite und Rückseite, getrennt durch Komma, Semikolon oder Tab.": "The file has only one column. Every row needs a front and a back, separated by a comma, semicolon or tab.",
+  "Ziel": "Target", "Name des Stapels": "Deck name", "Thema": "Subject",
+  "Vorderseite (Frage)": "Front (question)", "Rückseite (Antwort)": "Back (answer)",
+  "Erste Zeile ist eine Überschrift": "First row is a header",
+  "Vorder- und Rückseite sind dieselbe Spalte.": "Front and back are the same column.",
+  "{n} Karte übernehmen": "Add {n} card", "{n} Karten übernehmen": "Add {n} cards",
+  "{n} Karte importieren": "Import {n} card", "{n} Karten importieren": "Import {n} cards",
+  "Die Datei konnte nicht gelesen werden.": "The file could not be read.",
+  "Da ist nichts drin, das ich als Karten lesen kann.": "There is nothing in there I can read as cards.",
+  "Eingefügter Text": "Pasted text", "Füge zuerst Text ein.": "Paste some text first.",
+  "{a} neue Karten, {u} aktualisiert. Dein Lernstand bleibt erhalten.": "{a} new cards, {u} updated. Your progress is kept.",
+  "{n} Karte importiert.": "{n} card imported.", "{n} Karten importiert.": "{n} cards imported.",
+  "Beispiel": "Example", "Beispiel: Hauptstädte Europas": "Example: European capitals",
+
+  // Deck list
+  "Deine Stapel": "Your decks", "Deine Themen": "Your subjects",
+  "Noch keine Stapel. So sollte deine Datei aussehen:": "No decks yet. This is what your file should look like:",
+  "Spalte 1 · vorne": "Column 1 · front", "Spalte 2 · hinten": "Column 2 · back",
+  "der Apfel": "the apple", "Was misst ein Barometer?": "What does a barometer measure?", "Den Luftdruck": "Air pressure",
+  "Hauptstadt von Kanada": "Capital of Canada", "Beispielstapel ausprobieren": "Try the example deck",
+  "20 Hauptstädte Europas, jederzeit löschbar.": "20 European capitals, delete it whenever you like.",
+  "Tipp: Bündle Kartensets zu einem Thema, z. B. alle Sets einer Vorlesung. Dann lernst du sie in einer Runde.": "Tip: bundle card sets into a subject, e.g. all sets of one lecture. Then you study them in one round.",
+  "Karten": "Cards", "Statistik": "Statistics", "Stapel": "Deck",
+
+  // Topic tree
+  "Noch kein Themenbaum. Baue unter <b>„Bearbeiten“</b> eine Gliederung des Themas auf oder füge sie als Text ein, z. B. aus deinen Vorlesungsnotizen. Die Karten werden dann automatisch den Zweigen zugeordnet.": "No topic tree yet. Build an outline of the subject under <b>“Edit”</b> or paste it as text, e.g. from your lecture notes. The cards are then assigned to the branches automatically.",
+  "Automatisch": "Automatic", "Keinem Zweig zuordnen": "Assign to no branch", "von Hand": "by hand", "unsicher": "unsure",
+  "Zweig dieser Karte": "Branch of this card", "noch keine Karten": "no cards yet", "schwächster Zweig": "weakest branch",
+  "Karten ausblenden": "Hide cards", "{n} Karte anzeigen": "Show {n} card", "{n} Karten anzeigen": "Show {n} cards",
+  "{a} von {b} Karten zugeordnet, davon {m} von Hand.": "{a} of {b} cards assigned, {m} of them by hand.",
+  "{a} von {b} Karten zugeordnet.": "{a} of {b} cards assigned.",
+  "{a} von {b} Karten zugeordnet": "{a} of {b} cards assigned",
+  "Die Balken zeigen die Karteikasten-Fächer, der Prozentwert den Fortschritt. Unter „Karten anzeigen“ kannst du jede Karte einem anderen Zweig zuordnen.": "The bars show the card boxes, the percentage shows progress. Under “Show cards” you can move any card to another branch.",
+  "{n} unsichere Zuordnung prüfen": "Check {n} unsure assignment", "{n} unsichere Zuordnungen prüfen": "Check {n} unsure assignments",
+  "Diese Karten passen fast gleich gut zu zwei Zweigen. Ein Klick auf den richtigen Zweig legt sie fest.": "These cards fit two branches almost equally well. Click the right branch to fix them there.",
+  "{n} Karte ohne Zweig": "{n} card without a branch", "{n} Karten ohne Zweig": "{n} cards without a branch",
+  "Oft fehlt dafür ein Zweig im Baum. Ergänze ihn unter „Bearbeiten“ oder ordne die Karte hier direkt zu.": "Often the tree is missing a branch for them. Add it under “Edit” or assign the card right here.",
+  "Vorschläge für neue Zweige:": "Suggested new branches:", "Im Editor hinzufügen": "Add in the editor",
+  "Optional. Ein Zweig pro Zeile, „Autor: Begriffe“ hilft bei der Zuordnung. Enter: nächster Zweig, Tab: einrücken, Shift+Tab: ausrücken.": "Optional. One branch per line, “Author: terms” helps with assigning cards. Enter: next branch, Tab: indent, Shift+Tab: outdent.",
+  "Leitfrage oder Überschrift (optional)": "Guiding question or heading (optional)", "Überschrift des Baums": "Heading of the tree",
+  "Unterthema, z. B. Porter: Operative Effizienz": "Subtopic, e.g. Porter: operational effectiveness", "Hauptzweig": "Main branch",
+  "Zweig, Ebene {n}": "Branch, level {n}",
+  "Ausrücken (Shift+Tab)": "Outdent (Shift+Tab)", "Ausrücken": "Outdent", "Einrücken (Tab)": "Indent (Tab)", "Einrücken": "Indent",
+  "Nach oben (Alt+↑)": "Move up (Alt+↑)", "Nach oben": "Move up", "Nach unten (Alt+↓)": "Move down (Alt+↓)", "Nach unten": "Move down",
+  "Unterzweig hinzufügen": "Add sub-branch", "Löschen (Unterzweige rücken nach)": "Delete (sub-branches move up)", "Löschen": "Delete",
+  "Als Text einfügen": "Paste as text",
+  "Thema&#10;├── 1. Grundlagen&#10;│   └── Porter: Operative Effizienz vs. strategische Position&#10;└── 2. Innovation&#10;    └── Christensen: Disruptive Innovation": "Subject&#10;├── 1. Foundations&#10;│   └── Porter: operational effectiveness vs. strategic position&#10;└── 2. Innovation&#10;    └── Christensen: disruptive innovation",
+  "Gliederung ersetzen": "Replace outline", "Übernehmen": "Apply",
+  "Vorschläge aus Karten ohne Zweig": "Suggestions from cards without a branch", "passt unter „{p}“": "fits under “{p}”",
+  "Als Zweig hinzufügen": "Add as branch", "Erkannt: {a} Hauptzweige, {b} Unterthemen.": "Found: {a} main branches, {b} subtopics.",
+  "Im Text wurde keine Gliederung erkannt.": "No outline was found in the text.",
+  "Zweig „{a}“ hinzugefügt unter „{b}“.": "Branch “{a}” added under “{b}”.", "Zweig „{a}“ hinzugefügt.": "Branch “{a}” added.",
+  "Karte festgelegt: „{name}“.": "Card fixed to “{name}”.",
+  "automatische Zuordnung": "automatic assignment", "keinem Zweig": "no branch", "Karte zugeordnet: {name}.": "Card assigned: {name}.",
+
+  // Editing a subject
+  "Name des Themas": "Subject name", "z. B. Digitale Innovationsstrategie": "e.g. Digital innovation strategy",
+  "Farbe": "Colour", "Farbe {n}": "Colour {n}", "Kartensets in diesem Thema": "Card sets in this subject",
+  "(jetzt in „{name}“)": "(now in “{name}”)", "Noch keine Kartensets vorhanden.": "No card sets yet.",
+  "Speichern": "Save", "Thema anlegen": "Create subject",
+  "Thema löschen? Die Kartensets bleiben erhalten.": "Delete subject? The card sets are kept.",
+  "Thema löschen": "Delete subject", "Behalten": "Keep",
+  "Thema gelöscht. Die Kartensets sind jetzt unter „Ohne Thema“.": "Subject deleted. Its card sets are now under “No subject”.",
+  "Gib dem Thema einen Namen.": "Give the subject a name.", "Thema gespeichert.": "Subject saved.",
+  "Thema „{name}“ angelegt.": "Subject “{name}” created.",
+
+  // Progress, boxes, badges
+  "angefangen": "started", "Mindestens einmal gelernt": "Studied at least once", "gelernt": "learned",
+  "Kurze Lernrunden geschafft, kommt erst in ein paar Tagen wieder": "Got through the short learning steps, comes back in a few days",
+  "gefestigt": "solid", "Sitzt mindestens 3 Wochen": "Sticks for at least 3 weeks",
+  "von {n} Karten": "of {n} cards", "{tier} ab {p}": "{tier} from {p}",
+  "Dein Karteikasten": "Your card box",
+  "Je weiter rechts, desto länger sitzt die Karte. Gewusste Karten rücken ein Fach weiter, vergessene fallen zurück in Fach 1. Die Angabe unter dem Fach ist die Zeit, die du die Karte voraussichtlich sicher behältst.": "The further right, the longer the card sticks. Cards you know move up one box, forgotten ones fall back to box 1. The note under each box is how long you are likely to remember the card.",
+  "Abzeichen": "Badges", "{a} von {b}": "{a} of {b}", "Erreicht am {d}": "Earned on {d}",
+  "Neues Abzeichen: {list}": "New badge: {list}", "Neue Abzeichen: {list}": "New badges: {list}",
+
+  // Statistics
+  "gerade in der Lernphase": "in the learning phase", "gefestigt (Abstand ab 3 Wochen)": "solid (interval 3 weeks or more)",
+  "geschätzt gerade abrufbar": "estimated recall right now", "Fällige Karten, nächste 14 Tage": "Cards due, next 14 days",
+  "Fällige Karten pro Tag:": "Cards due per day:", "Grüner Balken = heute fällig.": "Green bar = due today.",
+  "Am häufigsten vergessen": "Forgotten most often", "{n}× vergessen": "forgotten {n}×",
+  "Tipp: Formuliere solche Karten kürzer oder teile sie in zwei auf.": "Tip: make these cards shorter or split them in two.",
+  "Problemkarten bearbeiten": "Edit problem cards",
+  "{n} Karte ist ausgesetzt und zählt hier nicht mit.": "{n} card is suspended and not counted here.",
+  "{n} Karten sind ausgesetzt und zählen hier nicht mit.": "{n} cards are suspended and not counted here.",
+
+  // Deck settings
+  "Name": "Name", "Neue Karten pro Tag": "New cards per day",
+  "Jede neue Karte bringt in den nächsten Tagen etwa 5–10 Wiederholungen mit.": "Each new card brings about 5–10 reviews over the next few days.",
+  "Abfragerichtung": "Direction", "Vorderseite → Rückseite": "Front → back", "Rückseite → Vorderseite": "Back → front",
+  "Beide Richtungen": "Both directions", "Bei beiden Richtungen hat jede Richtung ihren eigenen Lernstand.": "With both directions, each direction has its own progress.",
+  "Abfrageart": "Question type", "Automatisch (empfohlen)": "Automatic (recommended)", "Immer eintippen": "Always type",
+  "Immer Multiple Choice": "Always multiple choice", "Eintippen, selbst vergleichen": "Type, compare yourself", "Nur aufdecken": "Just reveal",
+  "Automatisch: neue Karten als Multiple Choice, danach Antwort eintippen. Lange Antworten werden über Schlüsselbegriffe geprüft. Mit *Sternchen* in der CSV legst du die Begriffe selbst fest.": "Automatic: new cards as multiple choice, after that you type the answer. Long answers are checked by key terms. Mark the terms yourself with *asterisks* in the CSV.",
+  "Ziel: so viel sollst du noch wissen, wenn eine Karte wiederkommt": "Target: how much you should still remember when a card comes back",
+  "Höher heißt öfter wiederholen und sicherer behalten. 90 % passt für die meisten. Ab 95 % steigt der Aufwand stark, vor Prüfungen kann sich das lohnen.": "Higher means more reviews and safer memory. 90% suits most people. Above 95% the workload rises sharply, which can pay off before exams.",
+  "CSV-Datei ergänzen": "Add a CSV file", "Als CSV exportieren": "Export as CSV",
+  "{n} Karte und Lernstand endgültig löschen?": "Permanently delete {n} card and its progress?",
+  "{n} Karten und Lernstand endgültig löschen?": "Permanently delete {n} cards and their progress?",
+  "Endgültig löschen": "Delete permanently", "Stapel löschen": "Delete deck", "Stapel gelöscht.": "Deck deleted.",
+
+  // Card list
+  "Vorderseite": "Front", "Rückseite": "Back", "Mit *Sternchen* markierst du Schlüsselbegriffe.": "Mark key terms with *asterisks*.",
+  "Keine Karte gefunden.": "No card found.",
+  "Keine Problemkarten. Als Problemkarte gilt eine Karte, die du {n}-mal oder öfter vergessen hast.": "No problem cards. A problem card is one you have forgotten {n} times or more.",
+  "Keine Karte ausgesetzt.": "No suspended cards.", "Keine Karten.": "No cards.",
+  "Lernstand zurücksetzen (die Karte gilt dann wieder als neu)": "Reset progress (the card counts as new again)",
+  "ausgesetzt": "suspended", "Karte und Lernstand löschen?": "Delete card and its progress?",
+  "Wieder lernen": "Study again", "Aussetzen": "Suspend", "Weitere {a} von {b} anzeigen": "Show {a} more of {b}",
+  "Karten durchsuchen": "Search cards", "Suchen …": "Search …", "Welche Karten": "Which cards", "Alle": "All",
+  "Noch nie gelernt": "Never studied", "Problemkarten": "Problem cards", "Ausgesetzt": "Suspended", "Neue Karte": "New card",
+  "{n} Karte vergisst du immer wieder.": "You keep forgetting {n} card.", "{n} Karten vergisst du immer wieder.": "You keep forgetting {n} cards.",
+  "Meist hilft es, sie kürzer zu formulieren oder aufzuteilen.": "Making them shorter or splitting them usually helps.", "Zeigen": "Show",
+  "Ausgesetzte Karten kommen nicht mehr dran, bis du sie wieder aufnimmst. Ihr Lernstand bleibt erhalten.": "Suspended cards won't come up until you bring them back. Their progress is kept.",
+  "Vorder- und Rückseite dürfen nicht leer sein.": "Front and back can't be empty.",
+  "Eine andere Karte in diesem Stapel hat schon genau diese Vorderseite.": "Another card in this deck already has exactly this front.",
+  "Karte hinzugefügt. Sie kommt als neue Karte dran.": "Card added. It will come up as a new card.",
+  "Karte gespeichert.": "Card saved.", "Karte ausgesetzt.": "Card suspended.", "Karte wird wieder abgefragt.": "Card will be asked again.",
+  "Karte gelöscht.": "Card deleted.",
+  "Karte ausgesetzt. Unter „Karten“ im Stapel kannst du sie bearbeiten und wieder aufnehmen.": "Card suspended. Under “Cards” in the deck you can edit it and bring it back.",
+
+  // Backup and export
+  "Automatisch gesichert heute um {time}.": "Backed up automatically today at {time}.",
+  "Automatisch gesichert {when}.": "Backed up automatically {when}.",
+  "Die App hebt jeden Tag eine Kopie auf, die letzten {n} Tage.": "The app keeps one copy per day for the last {n} days.",
+  "Ordner:": "Folder:", "Die erste automatische Sicherung entsteht beim nächsten Start des Servers.": "The first automatic backup is made the next time the server starts.",
+  "Zuletzt heruntergeladen: {when}.": "Last downloaded: {when}.", "Noch nie heruntergeladen.": "Never downloaded.",
+  "Sicherung vom {d}": "Backup from {d}",
+  "{d} Stapel mit {c} Karten, dazu Lernstand, Themen und Verlauf.": "{d} decks with {c} cards, plus progress, subjects and history.",
+  "Das ersetzt alles, was jetzt in der App ist. Der jetzige Stand wird vorher im Sicherungsordner abgelegt, du kannst also zurück.": "This replaces everything that is in the app now. The current state is saved to the backup folder first, so you can go back.",
+  "Stelle wieder her …": "Restoring …", "Wiederherstellen": "Restore", "Daten sichern": "Back up your data",
+  "Diese Kopien liegen auf demselben Computer. Lade ab und zu eine Sicherung herunter und lege sie woanders ab, z. B. auf einem USB-Stick oder in einem Cloud-Ordner. Sie enthält alle Stapel, deinen Lernstand und den Verlauf.": "These copies are on the same computer. Every now and then, download a backup and keep it somewhere else, e.g. on a USB stick or in a cloud folder. It contains all decks, your progress and your history.",
+  "Sicherung herunterladen": "Download backup", "Aus Sicherung wiederherstellen": "Restore from backup",
+  "Erst muss alles gespeichert sein. Versuch es gleich noch einmal.": "Everything needs to be saved first. Try again in a moment.",
+  "Die Datei ist keine gültige Sicherung.": "The file is not a valid backup.",
+  "Die Datei ist keine Karteikasten-Sicherung.": "The file is not a Karteikasten backup.",
+  "Wiederherstellen fehlgeschlagen.": "Restore failed.", "Der Server antwortet nicht.": "The server is not responding.",
+  "Sicherung wiederhergestellt. Lade neu …": "Backup restored. Reloading …",
+  "{n} Karten als CSV exportiert. Der Lernstand ist darin nicht enthalten.": "{n} cards exported as CSV. Progress is not included.",
+
+  // How it works
+  "Wie die App entscheidet, was du lernst": "How the app decides what you study",
+  "<b>Jede Karte hat ein eigenes Gedächtnismodell.</b> Aus deinen Antworten schätzt die App, wie stabil du eine Karte kennst und wie schwer sie für dich ist.": "<b>Every card has its own memory model.</b> From your answers, the app estimates how firmly you know a card and how hard it is for you.",
+  "<b>Eine Karte kommt wieder, kurz bevor du sie vergisst.</b> Sobald die geschätzte Chance, dass du die Antwort noch weißt, auf dein Ziel fällt (Standard 90 %), wird sie fällig. Leichte Karten wandern weit nach hinten, schwere kommen schnell zurück.": "<b>A card comes back just before you forget it.</b> As soon as the estimated chance that you still know the answer drops to your target (90% by default), it is due. Easy cards move far back, hard ones return quickly.",
+  "<b>Was am meisten wackelt, kommt zuerst.</b> Fällige Karten sind nach dieser Chance sortiert. Neue Karten werden in kleinen Mengen eingestreut, damit sich keine Berge an Wiederholungen aufstauen.": "<b>The shakiest cards come first.</b> Due cards are sorted by that chance. New cards are mixed in a few at a time, so reviews don't pile up.",
+  "<b>Neue und vergessene Karten werden kurz geübt.</b> Nach 1 und 10 Minuten kommen sie in derselben Runde wieder, bevor sie in den Abstand von Tagen gehen.": "<b>New and forgotten cards get a short practice.</b> They come back after 1 and 10 minutes in the same round before moving on to intervals of days.",
+  "Grundlage ist FSRS, ein offener, wissenschaftlich getesteter Wiederholungs-Algorithmus, den auch Anki verwendet. Aktiv: {engine}.": "It is based on FSRS, an open, scientifically tested spaced-repetition algorithm that Anki uses too. Active: {engine}.",
+
+  // Study round
+  "Zum ersten Mal": "First time", "Wird neu gelernt": "Relearning", "Lernphase": "Learning", "Zuletzt {ago}": "Last seen {ago}",
+  "Wiederholung": "Review", "Chance jetzt {p}": "chance now {p}", "vorwärts": "forward", "rückwärts": "backward",
+  "Antwort wählen": "Choose an answer", "Weiß ich nicht": "I don't know", "Deine Antwort": "Your answer",
+  "Antwort in eigenen Worten …": "Answer in your own words …", "Antwort eintippen …": "Type the answer …", "Prüfen": "Check",
+  "Deine Antwort:": "Your answer:", "Richtig": "Correct", "Teilweise richtig": "Partly correct", "Zu wenig getroffen": "Too little covered",
+  "Nicht beantwortet": "Not answered",
+  "{a} von {b} markierten Schlüsselbegriffen": "{a} of {b} marked key terms", "{a} von {b} Schlüsselbegriffen": "{a} of {b} key terms",
+  "Getroffen": "Found", "Fehlt": "Missing",
+  "Geprüft wird, ob die Begriffe vorkommen, nicht der Sinn. Passt der Vorschlag nicht, bewerte selbst.": "The check looks for the terms, not the meaning. If the suggestion doesn't fit, rate it yourself.",
+  "Vergleiche selbst": "Compare yourself",
+  "Die richtige Antwort steht auf der Karte. Bewerte, wie gut deine Antwort passt.": "The correct answer is on the card. Rate how well your answer matches.",
+  "Fast richtig": "Almost correct", "Nicht richtig": "Not correct",
+  "Achte auf Akzente und Sonderzeichen.": "Watch the accents and special characters.",
+  "Das kleine Wort am Anfang (der, die, das, to …) fehlt oder stimmt nicht.": "The small word at the start (der, die, das, to …) is missing or wrong.",
+  "Kleiner Tippfehler.": "Small typo.",
+  "Antwort zeigen": "Show answer", "Leertaste": "Space", "Wie gut wusstest du es?": "How well did you know it?", "Vorschlag": "Suggested",
+  "Enter übernimmt den Vorschlag. Du kannst auch selbst bewerten.": "Enter takes the suggestion. You can also rate it yourself.",
+  "Ehrlich bewerten: Schwer heißt gewusst, aber mit Mühe.": "Rate honestly: Hard means you knew it, but with effort.",
+  "Wähle mit 1–4 oder per Klick.": "Choose with 1–4 or click.",
+  "Schreib deine Antwort auf, Enter zeigt die Lösung zum Vergleich.": "Write down your answer, Enter shows the solution to compare.",
+  "In eigenen Worten antworten. Geprüft wird, ob die Schlüsselbegriffe vorkommen. Enter prüft, Shift+Enter macht eine neue Zeile.": "Answer in your own words. The check looks for the key terms. Enter checks, Shift+Enter starts a new line.",
+  "Tippe die Antwort und drücke Enter. Kleine Tippfehler sind okay.": "Type the answer and press Enter. Small typos are fine.",
+  "Erst selbst überlegen, dann Karte antippen.": "Think first, then tap the card.",
+  "Beenden": "Quit", "Noch in dieser Runde": "Left in this round", "neu": "new", "lernen": "learning", "fällig": "due",
+  "Letzte Karte:": "Last card:", "Antippen zum Aufdecken": "Tap to reveal",
+  "Problemkarte: schon {n}× vergessen.": "Problem card: forgotten {n}× already.",
+  "Oft liegt es an der Karte, nicht an dir. Kürzer formulieren oder aufteilen hilft meist.": "Often it's the card, not you. Making it shorter or splitting it usually helps.",
+  "Karte bearbeiten (E)": "Edit card (E)", "Letzte Bewertung rückgängig (Z)": "Undo last rating (Z)",
+  "Heute ist nichts mehr fällig.": "Nothing else is due today.",
+  "In diesem Thema ist heute nichts mehr fällig.": "Nothing else is due in this subject today.",
+  "In diesem Stapel ist heute nichts mehr fällig.": "Nothing else is due in this deck today.",
+  "Deine Entwicklung": "Your progress on this card", "(letzte {a} von {b})": "(last {a} of {b})",
+  "Letztes Mal {pf} von {pn} Begriffen, heute {nf} von {nn}": "Last time {pf} of {pn} terms, today {nf} of {nn}",
+  "besser geworden ↑": "improved ↑", "weniger als letztes Mal": "fewer than last time", "gleich viele": "same as before",
+  "Deine letzte Antwort ({ago})": "Your last answer ({ago})",
+
+  // Stamp after each card
+  "Vergessen": "Forgotten", "kommt in {when} nochmal": "comes back in {when}", "Kennengelernt": "Met it",
+  "Noch üben": "Keep practising", "nochmal in {when}, danach gilt sie als gelernt": "again in {when}, then it counts as learned",
+  "nochmal in {when}": "again in {when}", "Gelernt ✓": "Learned ✓", "wieder in {when} ({day})": "again in {when} ({day})",
+  "sitzt jetzt etwa {dur}, wieder am {day}": "now sticks for about {dur}, again on {day}", "Sitzt": "Sticks",
+
+  // More new cards
+  "{a} von {b} neuen Karten sitzen.": "{a} of {b} new cards are sticking.",
+  "Du kannst {n} weitere aufnehmen. Das bringt etwa {cost} Wiederholungen in den nächsten 7 Tagen.": "You can add {n} more. That brings about {cost} reviews over the next 7 days.",
+  "Du kannst {n} weitere aufnehmen.": "You can add {n} more.", "Nicht jetzt": "Not now",
+  "{n} neue Karte aufnehmen": "Add {n} new card", "{n} neue Karten aufnehmen": "Add {n} new cards",
+  "Heute hast du schon doppelt so viele neue Karten wie dein Tageslimit. Mehr auf einmal macht die nächsten Tage schwer.": "Today you already have twice as many new cards as your daily limit. More at once makes the next few days hard.",
+  "Bei den Wiederholungen deiner neuen Karten hast du heute {p} gewusst. Ab {min} geht es weiter, sonst lieber morgen, wenn sich das gesetzt hat.": "On the repeats of your new cards today you knew {p}. From {min} you can go on; otherwise better tomorrow, once it has settled.",
+  "{a} von {b} neuen Karten sitzen schon. Sobald es drei Viertel sind, kannst du weitere aufnehmen.": "{a} of {b} new cards are already sticking. Once it's three quarters, you can add more.",
+  "{n} neue Karte aufgenommen. Sie kommt zwischen die Karten, die du gerade lernst.": "{n} new card added. It comes between the cards you are learning right now.",
+  "{n} neue Karten aufgenommen. Sie kommen zwischen die Karten, die du gerade lernst.": "{n} new cards added. They come between the cards you are learning right now.",
+
+  // Finish screen
+  "Für heute geschafft.": "Done for today.", "{n} Karte in {m} Min.": "{n} card in {m} min.", "{n} Karten in {m} Min.": "{n} cards in {m} min.",
+  "Beim ersten Versuch gewusst:": "Known on the first try:",
+  "{n} Karte in ein höheres Fach gerückt": "{n} card moved up a box", "{n} Karten in ein höheres Fach gerückt": "{n} cards moved up a box",
+  "{n} zurückgefallen": "{n} fell back",
+  "Fortschritt im Stapel:": "Deck progress:", "Fortschritt im Thema:": "Subject progress:", "Fortschritt insgesamt:": "Overall progress:",
+  "Neue Abzeichen:": "New badges:", "Tagesziel erreicht ({a}/{b}).": "Daily goal reached ({a}/{b}).", "Serie:": "Streak:",
+  "Tagesziel: {a}/{b} Antworten. Noch {c} in einem anderen Stapel, oder hol dir 10 neue Karten.": "Daily goal: {a}/{b} answers. {c} more in another deck, or take 10 new cards.",
+  "Morgen warten etwa {r} Wiederholungen und bis zu {n} neue Karten.": "Tomorrow about {r} reviews and up to {n} new cards are waiting.",
+  "Morgen warten etwa {r} Wiederholungen.": "Tomorrow about {r} reviews are waiting.",
+  "Am meisten bringt es, jeden Tag kurz zu lernen.": "Studying a little every day helps most.",
+  "Zur Übersicht": "Back to overview"
+};
+
 /* ---------- Boot ---------- */
 async function boot() {
   render();
@@ -3213,8 +3618,8 @@ async function boot() {
   try { await loadAll(); }
   catch (e) {
     state.loadError = state.store.kind === "server"
-      ? "Der Karteikasten-Server antwortet nicht. Prüfe im Terminal, ob er noch läuft (npm start), und lade die Seite neu."
-      : "Deine Stapel konnten nicht geladen werden.";
+      ? T("Der Karteikasten-Server antwortet nicht. Prüfe im Terminal, ob er noch läuft (npm start), und lade die Seite neu.")
+      : T("Deine Stapel konnten nicht geladen werden.");
   }
   if (!state.loadError) { checkBadges({ silent: true }); await loadBackupStatus(); }
   state.loading = false; render();
