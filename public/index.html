@@ -199,6 +199,10 @@ td.off{color:var(--muted);opacity:.6}
 .hard-list li span:first-child{min-width:0;overflow-wrap:anywhere}
 .hard-list li span:last-child{color:var(--again);white-space:nowrap;font-variant-numeric:tabular-nums}
 
+.how summary{cursor:pointer;list-style-position:inside;font-family:var(--font-display);font-weight:700}
+.how[open] summary{margin-bottom:10px}
+.backup{display:flex;flex-direction:column;gap:10px}
+.nudge{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0;padding:10px 14px;border:2px dashed var(--hard);border-radius:var(--wobble-soft);font-size:15px}
 .how ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;max-width:65ch;color:var(--muted)}
 .how ol b{color:var(--ink)}
 .sample-table{max-width:420px}
@@ -2020,12 +2024,12 @@ function homeHTML() {
   if (state.loading) return head + `<p class="loading">${T("Lade deine Stapel …")}</p>`;
   if (state.loadError) return head + `<div class="panel"><p class="error">${esc(state.loadError)}</p></div>`;
   const importArea = state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML();
-  if (!state.topics.length) return head + todayHTML() + importArea + decksHTML() + badgesHTML() + backupHTML() + howHTML();
+  if (!state.topics.length) return head + backupNudgeHTML() + todayHTML() + importArea + decksHTML() + badgesHTML();
   // With subjects: tabs on top, "today" shows one compact row per subject, a subject tab shows its sets.
   const tab = homeTab(), creating = state.topicEdit && !state.topicEdit.id;
   // On a subject page the import area sits below the sets, unless an import is under way.
   const busy = !!(state.draft || state.pasteOpen), top = busy ? importArea : "", bottom = busy ? "" : importArea;
-  const body = tab === "today" ? todayHTML() + overviewHTML() + importArea + badgesHTML() + backupHTML() + howHTML()
+  const body = tab === "today" ? backupNudgeHTML() + todayHTML() + overviewHTML() + importArea + badgesHTML()
     : tab === "loose" ? top + `<section class="subject-page" aria-label="${T("Ohne Thema")}"><div class="topic loose"><div class="topic-head"><h3 class="topic-name">${T("Ohne Thema")}</h3>${studyButtonHTML(looseDecks(), 'data-act="study-loose"', T("Lernen"))}</div><ul class="decks">${looseDecks().map(deckHTML).join("")}</ul></div></section>` + bottom
     : tab === "archive" ? `<section class="subject-page" aria-label="${T("Archiv")}"><p class="muted small">${T("Themen im Archiv ruhen: Sie zählen nicht zu „heute“ und nicht zu „Alles lernen“. Ihr Lernstand bleibt erhalten, und du kannst sie jederzeit auffrischen oder zurückholen.")}</p>${archivedTopics().map(topicHTML).join("")}</section>`
     : top + `<section class="subject-page" aria-label="${esc(topicById(tab).name)}">${topicHTML(topicById(tab))}</section>` + bottom;
@@ -2052,6 +2056,8 @@ function uiSettingsHTML() {
       <span class="hint">${T("Wer nach Mitternacht lernt, zählt bis zu dieser Uhrzeit noch zum Vortag: für die Serie, die Tageslimits und was heute fällig ist.")}</span>
     </label>
     ${deckDefaultsHTML()}
+    ${backupHTML()}
+    ${howHTML()}
   </section>`;
 }
 // Defaults for new decks, and putting them on existing decks (with a confirmation).
@@ -2837,8 +2843,9 @@ function daysAgo(t) {
   const n = Math.round((new Date(dayKey()) - new Date(dayKey(t))) / DAY);
   return n <= 0 ? T("heute") : n === 1 ? T("gestern") : T("vor {n} Tagen", { n });
 }
+// Shown in the gear panel. Also without decks, so a fresh install can restore a backup.
 function backupHTML() {
-  if (state.store?.kind !== "server" || !state.decks.length && !state.restore) return "";
+  if (state.store?.kind !== "server") return "";
   const b = state.backup, r = state.restore;
   const time = t => new Date(t).toLocaleTimeString(LOCALE(), { hour: "2-digit", minute: "2-digit" });
   const auto = !b ? "" : b.lastAuto
@@ -2857,20 +2864,27 @@ function backupHTML() {
       </div>
     </div>` : "";
   return `
-  <section aria-labelledby="backup-h">
-    <div class="sec-head"><h2 id="backup-h">${T("Daten sichern")}</h2></div>
-    <div class="panel">
-      <p class="small" style="margin:0">${auto}</p>
+    <h3 class="set-group" id="backup-h">${T("Daten sichern")}</h3>
+    <div class="backup">
+      ${auto ? `<p class="small" style="margin:0">${auto}</p>` : ""}
       <p class="small" style="margin:0">${T("Diese Kopien liegen auf demselben Computer. Lade ab und zu eine Sicherung herunter und lege sie woanders ab, z. B. auf einem USB-Stick oder in einem Cloud-Ordner. Sie enthält alle Stapel, deinen Lernstand und den Verlauf.")}</p>
       <div class="row-actions">
-        <button class="btn primary" data-act="backup-dl">${T("Sicherung herunterladen")}</button>
+        <button class="btn primary" data-act="backup-dl" ${state.decks.length ? "" : "disabled"}>${T("Sicherung herunterladen")}</button>
         <label class="btn ghost" for="file-restore">${T("Aus Sicherung wiederherstellen")}</label>
         <input class="sr" type="file" id="file-restore" accept=".json,application/json">
-        ${dl ? `<span class="small ${stale ? "warn-text" : "muted"}">${dl}</span>` : ""}
+        ${dl && state.decks.length ? `<span class="small ${stale ? "warn-text" : "muted"}">${dl}</span>` : ""}
       </div>
       ${confirm}
-    </div>
-  </section>`;
+    </div>`;
+}
+// On the overview: a reminder once there is something worth keeping (oldest deck a week old) and no download for 30 days.
+function backupNudgeHTML() {
+  const b = state.backup;
+  if (state.store?.kind !== "server" || !b || !state.decks.length || state.uiOpen) return "";
+  const oldest = Math.min(...state.decks.map(d => d.created || Date.now()));
+  if (Date.now() - oldest < 7 * DAY || (b.lastDownload && Date.now() - b.lastDownload <= 30 * DAY)) return "";
+  return `<p class="nudge" role="status">${b.lastDownload ? T("Deine letzte heruntergeladene Sicherung ist von {when}.", { when: daysAgo(b.lastDownload) }) : T("Du hast noch nie eine Sicherung heruntergeladen.")}
+    <button class="btn ghost sm" data-act="ui-backup">${T("Jetzt sichern")}</button></p>`;
 }
 async function loadBackupStatus() {
   if (state.store?.kind !== "server") return;
@@ -2891,7 +2905,7 @@ async function openRestore(file) {
   const data = b.docs.map(d => d?.data || {});
   state.restore = { docs: b.docs, created: b.created || file.lastModified, decks: data.filter(d => d.kind === "deck").length,
     cards: data.filter(d => d.kind === "chunk").reduce((a, d) => a + (Array.isArray(d.cards) ? d.cards.length : 0), 0), busy: false };
-  render();
+  state.uiOpen = true; render();
   $("#backup-h")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 async function doRestore() {
@@ -2927,8 +2941,8 @@ function exportCSV(deck) {
 
 function howHTML() {
   return `
-  <section class="how" aria-labelledby="how-h">
-    <h2 id="how-h">${T("Wie die App entscheidet, was du lernst")}</h2>
+  <details class="how">
+    <summary class="set-group">${T("Wie die App entscheidet, was du lernst")}</summary>
     <ol>
       <li>${T("<b>Jede Karte hat ein eigenes Gedächtnismodell.</b> Aus deinen Antworten schätzt die App, wie stabil du eine Karte kennst und wie schwer sie für dich ist.")}</li>
       <li>${T("<b>Eine Karte kommt wieder, kurz bevor du sie vergisst.</b> Sobald die geschätzte Chance, dass du die Antwort noch weißt, auf dein Ziel fällt (Standard 90 %), wird sie fällig. Leichte Karten wandern weit nach hinten, schwere kommen schnell zurück.")}</li>
@@ -2936,7 +2950,7 @@ function howHTML() {
       <li>${T("<b>Neue und vergessene Karten werden kurz geübt.</b> Nach 1 und 10 Minuten kommen sie in derselben Runde wieder, bevor sie in den Abstand von Tagen gehen.")}</li>
     </ol>
     <p class="muted small">${T("Grundlage ist FSRS, ein offener, wissenschaftlich getesteter Wiederholungs-Algorithmus, den auch Anki verwendet. Aktiv: {engine}.", { engine: esc(T(ENGINE)) })}</p>
-  </section>`;
+  </details>`;
 }
 
 function studyHTML() {
@@ -3140,6 +3154,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === "ui-settings") { state.uiOpen = !state.uiOpen; render(); if (state.uiOpen) $("#ui-h")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+  else if (act === "ui-backup") { state.uiOpen = true; render(); $("#backup-h")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   else if (act === "pref-apply") { state.applyDefaults = { scope: "all", ...state.applyDefaults, confirm: true }; render(); }
   else if (act === "pref-apply-no") { state.applyDefaults = { ...state.applyDefaults, confirm: false }; render(); }
   else if (act === "pref-apply-yes") {
@@ -3441,6 +3456,8 @@ var EN = {
   "Wie das System": "Same as system", "Hell": "Light", "Dunkel": "Dark",
   "Auf diesem Gerät": "On this device", "Für alle Geräte": "On all devices",
   "Neuer Lerntag beginnt um": "A new study day starts at",
+  "Deine letzte heruntergeladene Sicherung ist von {when}.": "Your last downloaded backup is from {when}.",
+  "Du hast noch nie eine Sicherung heruntergeladen.": "You have never downloaded a backup.", "Jetzt sichern": "Back up now",
   "Neue Stapel starten mit": "New decks start with", "alle Stapel": "all decks", "Stapel in „{name}“": "decks in “{name}”",
   "Für welche Stapel": "Which decks", "Auf bestehende übertragen:": "Apply to existing:", "Übertragen …": "Apply …", "Übertragen": "Apply",
   "Neue Karten pro Tag, Abfrageart und Ziel bei {n} Stapel überschreiben?": "Overwrite new cards per day, question type and target for {n} deck?",
