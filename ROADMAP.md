@@ -15,20 +15,30 @@ Gelernt wurde bisher an **einem** Tag (Verlauf nur vom 8.11.), mit 3 Stapeln. Di
 **Für wen:** Studierende, die Theorie für Klausuren lernen. Also Definitionen, Modelle, Autoren, Zusammenhänge, keine Vokabeln.
 
 **USP in einem Satz:**
-> Die Lernkarten-App für Vorlesungsstoff: Sie prüft frei formulierte Antworten auf die Fachbegriffe, zeigt anhand der Vorlesungsgliederung, welches Kapitel noch wackelt, und plant die Wiederholungen wissenschaftlich, ohne Konto, ohne Abo, auf dem eigenen Rechner.
+> Die Lernkarten-App für Vorlesungsstoff: Sie fragt dich in eigenen Worten ab und zeigt dir pro Kapitel deiner Vorlesung, welche Fachbegriffe noch fehlen. Die Bewertung kannst du nachprüfen, und sie läuft ohne Abo und ohne Cloud auf dem eigenen Rechner.
 
-Was es so woanders nicht gibt:
+Vergleich mit der Konkurrenz (Web-Recherche vom 10.11.2026, Anbieterangaben, nicht selbst getestet):
 
-| | Karteikasten | Anki | Quizlet |
-|---|---|---|---|
-| Lange Antworten eintippen und prüfen lassen | ✅ Schlüsselbegriffe, grün/rot | ❌ nur selbst bewerten | ⚠️ nur kurze Antworten |
-| Schwächstes Kapitel erkennen (Themenbaum) | ✅ | ❌ | ❌ |
-| Moderne Wiederholungsplanung (FSRS) | ✅ | ✅ | ❌ |
-| Ehrliche Belohnung (nur Behalten zählt) | ✅ | – | ❌ Punkte, Streaks |
-| Daten bleiben bei mir, kostenlos | ✅ | ✅ | ❌ Konto, Abo |
-| Einfach einzurichten | ❌ Terminal nötig | ⚠️ | ✅ |
+| | Karteikasten | Anki | Quizlet | RemNote |
+|---|---|---|---|---|
+| Lange Antworten eintippen und prüfen lassen | ✅ Schlüsselbegriffe, grün/rot | ❌ nur selbst bewerten (KI über Zusatzprogramme) | ✅ KI nach Sinn, nur im Abo | ✅ KI nach Sinn, kostet KI-Guthaben |
+| Prüfung versteht Synonyme und Sinn | ❌ nur Begriffe | – | ✅ | ✅ |
+| Bewertung nachprüfbar (welche Begriffe fehlten) | ✅ | – | ❌ KI-Urteil | ❌ KI-Urteil |
+| Prüfung kostenlos und ohne Internet | ✅ | – | ❌ | ❌ |
+| Schwächstes Kapitel erkennen | ✅ eigene Vorlesungsgliederung | ⚠️ über Zusatzprogramme | ❌ | ✅ Lernstand pro Thema |
+| Planung auf ein Klausurdatum | ❌ geplant | ⚠️ über Zusatzprogramme | ❌ | ✅ |
+| Moderne Wiederholungsplanung (FSRS) | ✅ | ✅ | ❌ | ✅ |
+| Ehrliche Belohnung (nur Behalten zählt) | ✅ | – | ❌ Punkte, Streaks | – |
+| Daten bleiben bei mir, kostenlos | ✅ | ✅ | ❌ Konto, Abo | ❌ Konto, Abo für KI |
+| Einfach einzurichten | ❌ Terminal nötig | ⚠️ | ✅ | ✅ |
 
-Die letzte Zeile ist der Haken: Der USP richtet sich an Studierende, aber die meisten Studierenden können `npm start` nicht ausführen. Das entscheidet, wie weit die Roadmap gehen muss.
+Was daraus folgt:
+
+- **RemNote ist der wichtigste Vergleich.** Es verbindet schon KI-Bewertung getippter Antworten mit einem Klausurplaner nach Lernstand pro Thema. „Das gibt es nirgends“ stimmt also nicht.
+- **Was bleibt:** Die Bewertung ist nachprüfbar, kostet nichts und braucht kein Internet. Die Gliederung ist die eigene Vorlesung. Belohnt wird nur Behalten. Das ist eine kleinere Nische als gedacht.
+- **Größte Schwäche:** Die Konkurrenz versteht Sinn, Karteikasten nur Begriffe. Das Lernen von Synonymen wird damit die wichtigste Verbesserung am Kern.
+- **Klausurdatum ist Pflicht**, kein Alleinstellungsmerkmal mehr.
+- **Der Haken bleibt die letzte Zeile:** Der USP richtet sich an Studierende, aber die meisten Studierenden können `npm start` nicht ausführen. Das entscheidet, wie weit die Roadmap gehen muss.
 
 ## Grundsätze
 
