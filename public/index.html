@@ -343,6 +343,12 @@ h3{font-family:var(--font-hand);font-size:21px;font-weight:700}
 .seg legend{font-weight:700;margin-bottom:8px;padding:0}
 .set-group{font-size:22px;margin-top:6px;padding-top:12px;border-top:1.5px dashed var(--line)}
 .set-group.first{margin-top:0;padding-top:0;border-top:0}
+.set-sub{font-weight:700;margin:4px 0 8px}
+.defaults{display:flex;flex-direction:column;gap:10px}
+.defaults .row-actions{align-items:center}
+.defaults .form-grid{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.defaults .row-actions select{width:auto;max-width:100%}
+.defaults input[type=range]{width:100%}
 .ui-settings .field select{max-width:260px}
 .seg label{position:relative}
 .seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
@@ -606,12 +612,27 @@ function setTheme(th) {
 
 /* ---------- Settings for all devices ----------
    Stored in the profile, so phone and computer agree (unlike theme and language, which belong to one device). */
-const PREF_DEFAULTS = { dayStart: 4 };
+// deck: what a new deck starts with (the values a deck had before this setting existed).
+const PREF_DEFAULTS = { dayStart: 4, deck: { newPerDay: 20, dir: "f", mode: "auto", retention: 0.9 } };
+const clampInt = (v, lo, hi, fallback) => { const n = Math.round(+v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback; };
 function normPrefs(p) {
-  const o = { ...PREF_DEFAULTS, ...(p && typeof p === "object" ? p : {}) };
-  const ds = Math.round(+o.dayStart);
-  o.dayStart = Number.isFinite(ds) ? Math.min(6, Math.max(0, ds)) : PREF_DEFAULTS.dayStart;
-  return o;
+  const src = p && typeof p === "object" ? p : {}, D = PREF_DEFAULTS.deck, d = src.deck && typeof src.deck === "object" ? src.deck : {};
+  const ret = +d.retention;
+  return { ...PREF_DEFAULTS, ...src,
+    dayStart: clampInt(src.dayStart, 0, 6, PREF_DEFAULTS.dayStart),
+    deck: {
+      newPerDay: clampInt(d.newPerDay, 0, 500, D.newPerDay),
+      dir: ["f", "r", "b"].includes(d.dir) ? d.dir : D.dir,
+      mode: ["auto", "type", "mc", "self", "flip"].includes(d.mode) ? d.mode : D.mode,
+      retention: Number.isFinite(ret) && ret > 0 ? Math.min(0.97, Math.max(0.75, Math.round(ret * 100) / 100)) : D.retention
+    } };
+}
+const setDeckPref = (k, v) => setPref("deck", { ...prefs().deck, [k]: v });
+// Puts the default values on existing decks. The direction stays: changing it would add or drop a direction's progress.
+function applyDeckDefaults(decks) {
+  const d = prefs().deck;
+  for (const deck of decks) { deck.newPerDay = d.newPerDay; deck.mode = d.mode; deck.retention = d.retention; markMeta(deck); }
+  return decks.length;
 }
 const prefs = () => state.profile.prefs || normPrefs();
 function applyPrefs() { DAY_START = prefs().dayStart; }
@@ -1911,7 +1932,7 @@ function doImport() {
     assignChunks(deck);
     toast(T("{a} neue Karten, {u} aktualisiert. Dein Lernstand bleibt erhalten.", { a: added, u: updated }));
   } else {
-    const deck = { id: rid(), name: (d.name || T("Neuer Stapel")).trim().slice(0, 120), created: Date.now(), dir: "f", mode: "auto", topic: topicById(d.topic ?? state.lastTopic) ? (d.topic ?? state.lastTopic) : null, newPerDay: 20, retention: 0.9, newDay: "", newCount: 0, revDay: "", revCount: 0, chunks: 0, cardCount: 0 };
+    const deck = { id: rid(), name: (d.name || T("Neuer Stapel")).trim().slice(0, 120), created: Date.now(), dir: prefs().deck.dir, mode: prefs().deck.mode, topic: topicById(d.topic ?? state.lastTopic) ? (d.topic ?? state.lastTopic) : null, newPerDay: prefs().deck.newPerDay, retention: prefs().deck.retention, newDay: "", newCount: 0, revDay: "", revCount: 0, chunks: 0, cardCount: 0 };
     state.decks.unshift(deck);
     state.cards[deck.id] = pairs.map(([f, b]) => ({ i: rid(), f, b, sf: null, sr: null, c: 0 }));
     assignChunks(deck);
@@ -2030,7 +2051,34 @@ function uiSettingsHTML() {
       <select id="pref-daystart">${[0, 1, 2, 3, 4, 5, 6].map(h => `<option value="${h}" ${prefs().dayStart === h ? "selected" : ""}>${h ? T("{n} Uhr", { n: h }) : T("Mitternacht")}</option>`).join("")}</select>
       <span class="hint">${T("Wer nach Mitternacht lernt, zählt bis zu dieser Uhrzeit noch zum Vortag: für die Serie, die Tageslimits und was heute fällig ist.")}</span>
     </label>
+    ${deckDefaultsHTML()}
   </section>`;
+}
+// Defaults for new decks, and putting them on existing decks (with a confirmation).
+function deckDefaultsHTML() {
+  const d = prefs().deck, ret = Math.round(d.retention * 100), ap = state.applyDefaults || { scope: "all" };
+  const scopes = [["all", T("alle Stapel")], ...activeTopics().map(t => [t.id, T("Stapel in „{name}“", { name: esc(t.name) })])];
+  const target = ap.scope === "all" ? state.decks : decksOfTopic(ap.scope);
+  return `
+    <div class="defaults">
+      <p class="set-sub">${T("Neue Stapel starten mit")}</p>
+      <div class="form-grid">
+        <label class="field">${T("Neue Karten pro Tag")}<input type="number" id="pref-new" min="0" max="500" value="${d.newPerDay}"></label>
+        <label class="field">${T("Abfragerichtung")}<select id="pref-dir">${dirOptions(d.dir)}</select></label>
+        <label class="field">${T("Abfrageart")}<select id="pref-mode">${modeOptions(d.mode)}</select></label>
+        <label class="field"><span>${T("Ziel")} · <span id="pref-ret-out">${pctN(ret)}</span></span><input type="range" id="pref-ret" min="75" max="97" step="1" value="${ret}"></label>
+      </div>
+      ${state.decks.length ? `<div class="row-actions">
+        <label class="sr" for="pref-scope">${T("Für welche Stapel")}</label>
+        <span class="small">${T("Auf bestehende übertragen:")}</span>
+        <select id="pref-scope">${scopes.map(([v, label]) => `<option value="${v}" ${ap.scope === v ? "selected" : ""}>${label}</option>`).join("")}</select>
+        ${ap.confirm
+          ? `<span class="small">${Tn(target.length, "Neue Karten pro Tag, Abfrageart und Ziel bei {n} Stapel überschreiben?", "Neue Karten pro Tag, Abfrageart und Ziel bei {n} Stapeln überschreiben?")}</span>
+             <button class="btn primary sm" data-act="pref-apply-yes" ${target.length ? "" : "disabled"}>${T("Übertragen")}</button><button class="btn ghost sm" data-act="pref-apply-no">${T("Abbrechen")}</button>`
+          : `<button class="btn ghost sm" data-act="pref-apply">${T("Übertragen …")}</button>`}
+      </div>
+      <p class="muted small">${T("Die Abfragerichtung bleibt bei bestehenden Stapeln, wie sie ist, weil jede Richtung ihren eigenen Lernstand hat.")}</p>` : ""}
+    </div>`;
 }
 
 // "3 fällig · 5 neu · 2 Sets · 40 Karten". Without sets when sets is null.
@@ -2497,6 +2545,11 @@ function statsHTML(deck) {
   </div>`;
 }
 
+const DIRS = [["f", "Vorderseite → Rückseite"], ["r", "Rückseite → Vorderseite"], ["b", "Beide Richtungen"]];
+const MODES = [["auto", "Automatisch (empfohlen)"], ["type", "Immer eintippen"], ["mc", "Immer Multiple Choice"], ["self", "Eintippen, selbst vergleichen"], ["flip", "Nur aufdecken"]];
+const optionsOf = (list, sel) => list.map(([v, label]) => `<option value="${v}" ${v === sel ? "selected" : ""}>${T(label)}</option>`).join("");
+const dirOptions = sel => optionsOf(DIRS, sel);
+const modeOptions = sel => optionsOf(MODES, sel);
 function settingsHTML(deck) {
   const ret = Math.round((deck.retention || 0.9) * 100);
   const confirming = state.confirmDelete === deck.id;
@@ -2508,18 +2561,8 @@ function settingsHTML(deck) {
         <option value="">${T("Ohne Thema")}</option>${state.topics.map(t => `<option value="${t.id}" ${deck.topic === t.id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}
       </select></label>` : ""}
       <label class="field">${T("Neue Karten pro Tag")}<input type="number" id="set-new" data-id="${deck.id}" min="0" max="500" value="${deck.newPerDay ?? 20}"><span class="hint">${T("Jede neue Karte bringt in den nächsten Tagen etwa 5–10 Wiederholungen mit.")}</span></label>
-      <label class="field">${T("Abfragerichtung")}<select id="set-dir" data-id="${deck.id}">
-        <option value="f" ${deck.dir === "f" ? "selected" : ""}>${T("Vorderseite → Rückseite")}</option>
-        <option value="r" ${deck.dir === "r" ? "selected" : ""}>${T("Rückseite → Vorderseite")}</option>
-        <option value="b" ${deck.dir === "b" ? "selected" : ""}>${T("Beide Richtungen")}</option>
-      </select><span class="hint">${T("Bei beiden Richtungen hat jede Richtung ihren eigenen Lernstand.")}</span></label>
-      <label class="field">${T("Abfrageart")}<select id="set-mode" data-id="${deck.id}">
-        <option value="auto" ${(deck.mode || "auto") === "auto" ? "selected" : ""}>${T("Automatisch (empfohlen)")}</option>
-        <option value="type" ${deck.mode === "type" ? "selected" : ""}>${T("Immer eintippen")}</option>
-        <option value="mc" ${deck.mode === "mc" ? "selected" : ""}>${T("Immer Multiple Choice")}</option>
-        <option value="self" ${deck.mode === "self" ? "selected" : ""}>${T("Eintippen, selbst vergleichen")}</option>
-        <option value="flip" ${deck.mode === "flip" ? "selected" : ""}>${T("Nur aufdecken")}</option>
-      </select><span class="hint">${T("Automatisch: neue Karten als Multiple Choice, danach Antwort eintippen. Lange Antworten werden über Schlüsselbegriffe geprüft. Mit *Sternchen* in der CSV legst du die Begriffe selbst fest.")}</span></label>
+      <label class="field">${T("Abfragerichtung")}<select id="set-dir" data-id="${deck.id}">${dirOptions(deck.dir)}</select><span class="hint">${T("Bei beiden Richtungen hat jede Richtung ihren eigenen Lernstand.")}</span></label>
+      <label class="field">${T("Abfrageart")}<select id="set-mode" data-id="${deck.id}">${modeOptions(deck.mode || "auto")}</select><span class="hint">${T("Automatisch: neue Karten als Multiple Choice, danach Antwort eintippen. Lange Antworten werden über Schlüsselbegriffe geprüft. Mit *Sternchen* in der CSV legst du die Begriffe selbst fest.")}</span></label>
     </div>
     <label class="field">${T("Ziel: so viel sollst du noch wissen, wenn eine Karte wiederkommt")} · <span id="ret-out">${pctN(ret)}</span>
       <input type="range" id="set-ret" data-id="${deck.id}" min="75" max="97" step="1" value="${ret}">
@@ -3097,6 +3140,13 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === "ui-settings") { state.uiOpen = !state.uiOpen; render(); if (state.uiOpen) $("#ui-h")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+  else if (act === "pref-apply") { state.applyDefaults = { scope: "all", ...state.applyDefaults, confirm: true }; render(); }
+  else if (act === "pref-apply-no") { state.applyDefaults = { ...state.applyDefaults, confirm: false }; render(); }
+  else if (act === "pref-apply-yes") {
+    const scope = state.applyDefaults?.scope || "all", n = applyDeckDefaults(scope === "all" ? state.decks : decksOfTopic(scope));
+    state.applyDefaults = { scope, confirm: false }; render();
+    toast(Tn(n, "Auf einen Stapel übertragen.", "Auf {n} Stapel übertragen."));
+  }
   else if (act === "study") startStudy(id, b.dataset.extra === "1");
   else if (act === "study-topic") startTopic(id, b.dataset.extra === "1");
   else if (act === "extra-new") addExtraNew();
@@ -3241,6 +3291,11 @@ document.addEventListener("change", e => {
   else if (t.name === "topic-color" && state.topicEdit) state.topicEdit.color = +t.value;
   else if (t.name === "ui-theme") setTheme(t.value);
   else if (t.id === "pref-daystart") setPref("dayStart", +t.value);
+  else if (t.id === "pref-new") setDeckPref("newPerDay", +t.value);
+  else if (t.id === "pref-dir") setDeckPref("dir", t.value);
+  else if (t.id === "pref-mode") setDeckPref("mode", t.value);
+  else if (t.id === "pref-ret") setDeckPref("retention", +t.value / 100);
+  else if (t.id === "pref-scope") { state.applyDefaults = { scope: t.value, confirm: false }; render(); }
   else if (t.name === "ui-lang") { setLang(t.value); render(); $(`input[name="ui-lang"][value="${t.value}"]`)?.focus(); }
   else if (t.id === "cl-filter") { state.cardList.filter = t.value; state.cardList.limit = 50; state.cardList.edit = null; render(); $("#cl-filter")?.focus(); }
   else if (t.id === "imp-f" && d) { d.fc = +t.value; render(); }
@@ -3276,6 +3331,7 @@ document.addEventListener("input", e => {
     if (f) { f.node.label = t.value; clearTimeout(olTimer); olTimer = setTimeout(refreshOutlineInfo, 350); }
   }
   if (t.id === "set-ret") { const o = $("#ret-out"); if (o) o.textContent = pctN(t.value); }
+  if (t.id === "pref-ret") { const o = $("#pref-ret-out"); if (o) o.textContent = pctN(t.value); }
   if (t.id === "cl-q") { const deck = deckById(t.dataset.id); state.cardList.q = t.value; state.cardList.limit = 50; state.cardList.edit = null; state.cardList.confirmDel = null; if (deck) refreshCardList(deck); }
 });
 document.addEventListener("dragover", e => { if (state.view !== "home") return; e.preventDefault(); $("#drop")?.classList.add("over"); });
@@ -3384,7 +3440,13 @@ var EN = {
   "Einstellungen": "Settings", "Schließen": "Close", "Darstellung": "Appearance",
   "Wie das System": "Same as system", "Hell": "Light", "Dunkel": "Dark",
   "Auf diesem Gerät": "On this device", "Für alle Geräte": "On all devices",
-  "Neuer Lerntag beginnt um": "A new study day starts at", "{n} Uhr": "{n} am", "Mitternacht": "midnight",
+  "Neuer Lerntag beginnt um": "A new study day starts at",
+  "Neue Stapel starten mit": "New decks start with", "alle Stapel": "all decks", "Stapel in „{name}“": "decks in “{name}”",
+  "Für welche Stapel": "Which decks", "Auf bestehende übertragen:": "Apply to existing:", "Übertragen …": "Apply …", "Übertragen": "Apply",
+  "Neue Karten pro Tag, Abfrageart und Ziel bei {n} Stapel überschreiben?": "Overwrite new cards per day, question type and target for {n} deck?",
+  "Neue Karten pro Tag, Abfrageart und Ziel bei {n} Stapeln überschreiben?": "Overwrite new cards per day, question type and target for {n} decks?",
+  "Die Abfragerichtung bleibt bei bestehenden Stapeln, wie sie ist, weil jede Richtung ihren eigenen Lernstand hat.": "Existing decks keep their direction, because each direction has its own progress.",
+  "Auf einen Stapel übertragen.": "Applied to one deck.", "Auf {n} Stapel übertragen.": "Applied to {n} decks.", "{n} Uhr": "{n} am", "Mitternacht": "midnight",
   "Wer nach Mitternacht lernt, zählt bis zu dieser Uhrzeit noch zum Vortag: für die Serie, die Tageslimits und was heute fällig ist.": "If you study after midnight, it still counts as the day before until this time: for your streak, the daily limits and what is due today.",
   "Gilt für dieses Gerät. Deine Karten bleiben, wie sie sind, nur die Oberfläche wechselt die Sprache.": "Applies to this device. Your cards stay as they are, only the app's own text changes language.",
 
