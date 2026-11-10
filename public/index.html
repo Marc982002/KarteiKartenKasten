@@ -20,6 +20,7 @@
   --again:#c4433a; --hard:#a86c12; --good:#2b844a; --easy:#2a68c9;
   --new:#2a68c9; --learn:#c4433a; --rev:#2b844a;
   --bronze:#a5652e; --silver:#6b7788; --gold:#9c7406;
+  --fach-0:#6152c8; --fach-1:#13805f; --fach-2:#c0532a; --fach-3:#b8406f; --fach-4:#2e6fc4; --fach-5:#9a6510; --fach-6:#4a8a1c; --fach-7:#5b6678;
   --font-display:"Caveat","Kalam","Segoe Print","Bradley Hand",cursive;
   --font-hand:"Kalam","Segoe Print","Bradley Hand","Comic Sans MS",cursive;
   --torn-top:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 16' preserveAspectRatio='none'%3E%3Cpath d='M0 16 L0.0 5.3 L5.1 7.6 L9.6 6.8 L16.1 3.4 L23.7 3.3 L30.7 3.5 L35.3 6.0 L45.1 3.9 L50.7 7.4 L61.3 7.0 L68.1 9.8 L72.4 9.0 L78.5 4.0 L83.3 5.2 L93.0 4.3 L101.1 7.5 L107.7 6.8 L112.1 3.4 L117.6 7.8 L124.5 5.2 L132.6 6.2 L138.7 8.6 L147.6 4.7 L155.7 6.7 L165.8 8.1 L171.8 9.9 L176.6 5.9 L185.9 4.1 L193.4 3.3 L202.0 8.4 L210.0 9.1 L216.2 7.9 L224.4 7.1 L231.6 8.9 L240.0 5.3 L240 16 Z' fill='black'/%3E%3C/svg%3E");
@@ -39,6 +40,7 @@
   --again:#ee6e64; --hard:#e2a544; --good:#55c27a; --easy:#6ea8ff;
   --new:#6ea8ff; --learn:#ee6e64; --rev:#55c27a; color-scheme:dark;
   --bronze:#d99a63; --silver:#b4bfcc; --gold:#e6bb3c;
+  --fach-0:#a79df0; --fach-1:#5fcfa5; --fach-2:#f0997b; --fach-3:#ed93b1; --fach-4:#85b7eb; --fach-5:#efb455; --fach-6:#97c459; --fach-7:#a9b3c2;
 }}
 :root[data-theme="dark"]{
   --bg:#1b1f26; --surface:#1b1f26; --ink:#e7e9ee; --muted:#9ca4b3; --line:#363f4c;
@@ -50,6 +52,7 @@
   --again:#ee6e64; --hard:#e2a544; --good:#55c27a; --easy:#6ea8ff;
   --new:#6ea8ff; --learn:#ee6e64; --rev:#55c27a; color-scheme:dark;
   --bronze:#d99a63; --silver:#b4bfcc; --gold:#e6bb3c;
+  --fach-0:#a79df0; --fach-1:#5fcfa5; --fach-2:#f0997b; --fach-3:#ed93b1; --fach-4:#85b7eb; --fach-5:#efb455; --fach-6:#97c459; --fach-7:#a9b3c2;
 }
 *{box-sizing:border-box}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -129,6 +132,37 @@ textarea.ce-input{font:inherit;font-size:16px;min-height:0;line-height:1.45}
 .ce-note{margin:0;color:var(--again)}
 .leech-note{border:2px dashed var(--again);border-radius:var(--radius);padding:10px 14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .foot-links{display:flex;gap:16px;flex-wrap:wrap}
+.subject-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.subject-tab{font:inherit;font-size:15px;font-weight:700;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:999px;padding:6px 14px;min-height:38px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.subject-tab[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.subject-tab .dot{width:10px;height:10px;border-radius:50%;background:var(--fc);display:inline-block}
+.subject-tab.add{color:var(--muted);border-style:dashed}
+.tab-count{font-size:12px;font-weight:700;color:var(--rev);font-variant-numeric:tabular-nums}
+.tab-count.muted-count{color:var(--muted)}
+.all-card{display:flex;justify-content:space-between;align-items:center;gap:12px 16px;flex-wrap:wrap;border:2px solid var(--accent);border-radius:var(--radius);padding:14px 18px}
+.all-card p{margin:0}
+.all-title{font-weight:700;font-size:18px}
+.subject-rows{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}
+.subject-row{display:grid;grid-template-columns:6px minmax(0,1fr) auto;gap:12px 14px;align-items:center;padding:12px 0;border-bottom:1px dashed var(--line)}
+.subject-bar{width:6px;align-self:stretch;min-height:44px;border-radius:3px;background:var(--fc)}
+.subject-link{font:inherit;font-size:19px;font-weight:700;color:var(--ink);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+.subject-link:hover{text-decoration:underline}
+.subject-progress{height:5px;max-width:260px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}
+.subject-progress i{display:block;height:100%;background:var(--fc)}
+.subject-row.archived .subject-link{color:var(--muted)}
+.topic{border-top-color:var(--fc,var(--sketch))}
+.topic .topic-name{color:var(--fc,var(--accent))}
+.topic.is-archived .topic-name{opacity:.75}
+.archived-tag{font-family:var(--font-body);font-size:13px;font-weight:700;color:var(--muted);border:1.5px solid var(--line);border-radius:999px;padding:1px 8px;vertical-align:middle}
+.color-picks{display:flex;gap:8px;flex-wrap:wrap;border:0;padding:0;margin:0}
+.color-picks legend{font-weight:700;margin-bottom:6px}
+.swatch{width:30px;height:30px;border-radius:50%;background:var(--fc);cursor:pointer;display:inline-flex;position:relative}
+.swatch input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.swatch:has(input:checked){box-shadow:0 0 0 3px var(--surface),0 0 0 5px var(--ink)}
+.swatch:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:4px}
+.subject-chip{font-size:12.5px;font-weight:700;color:var(--fc);border:1.5px solid var(--fc);border-radius:999px;padding:0 8px;white-space:nowrap}
+.card.has-subject{box-shadow:inset 6px 0 0 var(--fc),var(--shadow)}
+@media (max-width:600px){.subject-row{grid-template-columns:6px minmax(0,1fr)}.subject-row>.btn{grid-column:2;justify-self:start}}
 .extra-offer{border:2px solid var(--good);border-radius:var(--radius);padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .extra-offer p{margin:0}
 .restore-confirm{border:2px solid var(--again);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
@@ -813,6 +847,7 @@ const state = {
   lastTopic: "",
   treeOpen: null,                  // topic id whose tree panel is open
   treeExpanded: new Set(),         // open card lists in the tree view (branch ids, "rest", "unsure")
+  home: (() => { try { return localStorage.getItem("kk:ui:home") || "today"; } catch { return "today"; } })(), // open tab on the overview
   cardList: { q: "", filter: "all", limit: 50, edit: null, confirmDel: null, adding: false }, // the "Karten" tab of a deck
   backup: null,                    // status from the server: backup folder, last automatic backup, last download
   restore: null                    // { name, created, docs, decks, cards, busy } while a restore waits for confirmation
@@ -835,7 +870,43 @@ const bonusToday = d => d.bonusDay === dayKey() ? d.bonus || 0 : 0;
 const topicById = id => state.topics.find(t => t.id === id);
 const decksOfTopic = id => state.decks.filter(d => d.topic === id);
 function saveTopics() {
-  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, outline: t.outline || null, pins: t.pins || {} })) }));
+  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, outline: t.outline || null, pins: t.pins || {}, color: t.color ?? 0, archived: !!t.archived })) }));
+}
+/* ---------- Several subjects: colours, archive, tabs on the overview ---------- */
+const COLORS = 8;
+const topicColor = t => `var(--fach-${(t?.color ?? 0) % COLORS})`;
+// The first colour no topic uses yet (or the least used one).
+function nextColor() {
+  const used = Array(COLORS).fill(0); for (const t of state.topics) used[(t.color ?? 0) % COLORS]++;
+  return used.indexOf(Math.min(...used));
+}
+const activeTopics = () => state.topics.filter(t => !t.archived);
+const archivedTopics = () => state.topics.filter(t => t.archived);
+const looseDecks = () => state.decks.filter(d => !d.topic || !topicById(d.topic));
+// Decks that count for "today": everything except subjects in the archive.
+const activeDecks = () => state.decks.filter(d => !topicById(d.topic)?.archived);
+const topicOfDeck = d => d && topicById(d.topic);
+// Which tab of the overview is open: "today", a topic id, "loose" or "archive". Remembered per browser.
+function homeTab() {
+  const h = state.home;
+  if (h === "today" || (h === "loose" && looseDecks().length) || (h === "archive" && archivedTopics().length) || topicById(h)) return h;
+  return "today";
+}
+function setHome(h) {
+  state.home = h; if (topicById(h)) state.lastTopic = h;
+  try { localStorage.setItem("kk:ui:home", h); } catch {}
+}
+// Rough minutes for a round: typical seconds per answer from your history, times the answers it will take.
+function secondsPerAnswer() {
+  const ms = [];
+  for (const list of state.attempts.values()) for (const e of list) if (e[5]?.ms > 0) ms.push(Math.min(e[5].ms, 120000));
+  if (ms.length < 10) return 15;
+  ms.sort((a, b) => a - b);
+  return Math.max(3, ms[Math.floor(ms.length / 2)] / 1000);
+}
+function minutesFor(qs) {
+  const answers = qs.reduce((a, q) => a + q.nRev + q.nLearn * 1.5 + q.nNew * 3, 0); // new cards come back in the learning steps
+  return answers ? Math.max(1, Math.round(answers * secondsPerAnswer() / 60)) : 0;
 }
 // Fach distribution across several decks (a topic), same shape as deckProgress().
 function progressOf(decks) {
@@ -1243,7 +1314,7 @@ function checkBadges({ silent = false } = {}) {
 }
 // "Alles erledigt": nothing due and no new-card allowance left in any deck today.
 function allCleared() {
-  return state.decks.every(d => { const q = buildQueue(d); return !q.main.length && !q.learn.length; });
+  return activeDecks().every(d => { const q = buildQueue(d); return !q.main.length && !q.learn.length; });
 }
 
 function dayShift(i) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + i); return d; }
@@ -1570,16 +1641,28 @@ function addExtraNew() {
 /* ---------- Session ---------- */
 // Before a round: pick up what another device did, so no card comes twice.
 async function startStudy(id, extra = false) { await pullChanges({ quiet: true }); const deck = deckById(id); if (deck) startSession([deck], deck.name, null, { extra }); }
+// Everything due today, one subject after another: switching subjects on every card is tiring.
+async function startAll(extra = false) {
+  await pullChanges({ quiet: true });
+  const blocks = activeTopics().map(t => decksOfTopic(t.id)).concat([looseDecks()]).filter(b => b.length);
+  startSession(blocks.flat(), "Alles für heute", null, { extra, blocks });
+}
+async function startLoose(extra = false) { await pullChanges({ quiet: true }); startSession(looseDecks(), "Ohne Thema", null, { extra }); }
 async function startTopic(id, extra = false) { await pullChanges({ quiet: true }); const t = topicById(id); if (t) startSession(decksOfTopic(id), t.name, id, { extra }); }
-function startSession(decks, title, topicId = null, { extra = false } = {}) {
-  const qs = decks.map(buildQueue);
-  const rev = qs.flatMap(q => q.rev).sort((a, b) => a.pri - b.pri);
-  const learn = qs.flatMap(q => q.learn).sort((a, b) => ust(a).due - ust(b).due);
-  // New cards take turns between the sets, so each set gets its share.
-  const lists = qs.map(q => q.fresh.slice()), fresh = [];
-  while (lists.some(l => l.length)) for (const l of lists) if (l.length) fresh.push(l.shift());
-  const main = mixQueue(rev, fresh);
-  if (!main.length && !learn.length && !(extra && extraOffer(decks)?.ok)) { toast(decks.length > 1 ? "In diesem Thema ist heute nichts mehr fällig." : "In diesem Stapel ist heute nichts mehr fällig."); return; }
+// blocks: groups of decks studied one after another (one subject at a time), each mixed inside.
+function startSession(decks, title, topicId = null, { extra = false, blocks = null } = {}) {
+  const qmap = new Map(decks.map(d => [d.id, buildQueue(d)]));
+  const blockMain = ds => {
+    const qs = ds.map(d => qmap.get(d.id));
+    const rev = qs.flatMap(q => q.rev).sort((a, b) => a.pri - b.pri);
+    // New cards take turns between the sets, so each set gets its share.
+    const lists = qs.map(q => q.fresh.slice()), fresh = [];
+    while (lists.some(l => l.length)) for (const l of lists) if (l.length) fresh.push(l.shift());
+    return mixQueue(rev, fresh);
+  };
+  const main = (blocks || [decks]).flatMap(blockMain);
+  const learn = [...qmap.values()].flatMap(q => q.learn).sort((a, b) => ust(a).due - ust(b).due);
+  if (!main.length && !learn.length && !(extra && extraOffer(decks)?.ok)) { toast(blocks ? "Heute ist nichts mehr fällig." : decks.length > 1 ? "In diesem Thema ist heute nichts mehr fällig." : "In diesem Stapel ist heute nichts mehr fällig."); return; }
   state.session = { deckIds: decks.map(d => d.id), title, topicId, main, learn, current: null, revealed: false, done: 0, first: new Map(), history: [], lastKey: null, started: Date.now(), finished: false, startFach: new Map(), lastMove: null, badges: [] };
   state.view = "study"; state.open = null;
   if (!main.length && !learn.length) state.session.main.push(...pickExtra(decks, extraOffer(decks).n));
@@ -1830,7 +1913,71 @@ function homeHTML() {
   </header>`;
   if (state.loading) return head + `<p class="loading">Lade deine Stapel …</p>`;
   if (state.loadError) return head + `<div class="panel"><p class="error">${esc(state.loadError)}</p></div>`;
-  return head + todayHTML() + (state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML()) + decksHTML() + badgesHTML() + backupHTML() + howHTML();
+  const importArea = state.draft ? importHTML() : state.pasteOpen ? pasteHTML() : dropHTML();
+  if (!state.topics.length) return head + todayHTML() + importArea + decksHTML() + badgesHTML() + backupHTML() + howHTML();
+  // With subjects: tabs on top, "today" shows one compact row per subject, a subject tab shows its sets.
+  const tab = homeTab(), creating = state.topicEdit && !state.topicEdit.id;
+  // On a subject page the import area sits below the sets, unless an import is under way.
+  const busy = !!(state.draft || state.pasteOpen), top = busy ? importArea : "", bottom = busy ? "" : importArea;
+  const body = tab === "today" ? todayHTML() + overviewHTML() + importArea + badgesHTML() + backupHTML() + howHTML()
+    : tab === "loose" ? top + `<section class="subject-page" aria-label="Ohne Thema"><div class="topic loose"><div class="topic-head"><h3 class="topic-name">Ohne Thema</h3>${studyButtonHTML(looseDecks(), 'data-act="study-loose"', "Lernen")}</div><ul class="decks">${looseDecks().map(deckHTML).join("")}</ul></div></section>` + bottom
+    : tab === "archive" ? `<section class="subject-page" aria-label="Archiv"><p class="muted small">Themen im Archiv ruhen: Sie zählen nicht zu „heute“ und nicht zu „Alles lernen“. Ihr Lernstand bleibt erhalten, und du kannst sie jederzeit auffrischen oder zurückholen.</p>${archivedTopics().map(topicHTML).join("")}</section>`
+    : top + `<section class="subject-page" aria-label="${esc(topicById(tab).name)}">${topicHTML(topicById(tab))}</section>` + bottom;
+  return head + tabsHTML(tab) + (creating ? topicEditHTML() : "") + body;
+}
+
+function tabsHTML(tab) {
+  const chip = (id, label, extra = "", style = "") => `<button class="subject-tab" data-act="home" data-id="${id}" aria-pressed="${tab === id}" ${style ? `style="${style}"` : ""}>${label}${extra}</button>`;
+  const dueOf = decks => decks.reduce((a, d) => { const q = buildQueue(d); return a + q.nRev + q.nLearn; }, 0);
+  const badge = n => n ? `<span class="tab-count">${n}</span>` : "";
+  return `<nav class="subject-tabs" aria-label="Themen">
+    ${chip("today", "Heute")}
+    ${activeTopics().map(t => chip(t.id, `<i class="dot" aria-hidden="true"></i>${esc(t.name)}`, badge(dueOf(decksOfTopic(t.id))), `--fc:${topicColor(t)}`)).join("")}
+    ${looseDecks().length ? chip("loose", "Ohne Thema", badge(dueOf(looseDecks()))) : ""}
+    ${archivedTopics().length ? chip("archive", "Archiv", `<span class="tab-count muted-count">${archivedTopics().length}</span>`) : ""}
+    <button class="subject-tab add" data-act="topic-new" aria-pressed="${!!(state.topicEdit && !state.topicEdit.id)}">+ Neues Thema</button>
+  </nav>`;
+}
+// The learn button of a deck group: "Lernen", or more new cards, or done for today.
+function studyButtonHTML(decks, attrs, label) {
+  const qs = decks.map(buildQueue), nothing = !qs.some(q => q.nRev + q.nLearn + q.nNew);
+  const off = nothing ? extraOffer(decks) : null;
+  return off?.ok ? `<button class="btn ghost" ${attrs} data-extra="1" title="Die heutigen neuen Karten sitzen schon gut">${off.n} weitere neue</button>`
+    : `<button class="btn ${nothing ? "ghost" : "primary"}" ${attrs} ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : label}</button>`;
+}
+// "Today": one button for everything, then one compact row per subject.
+function overviewHTML() {
+  const groups = activeTopics().map(t => ({ t, decks: decksOfTopic(t.id) }));
+  if (looseDecks().length) groups.push({ t: null, decks: looseDecks() });
+  const allQs = groups.flatMap(g => g.decks.map(buildQueue));
+  const due = allQs.reduce((a, q) => a + q.nRev + q.nLearn, 0), fresh = allQs.reduce((a, q) => a + q.nNew, 0), mins = minutesFor(allQs);
+  const row = ({ t, decks }) => {
+    const qs = decks.map(buildQueue), d = qs.reduce((a, q) => a + q.nRev + q.nLearn, 0), n = qs.reduce((a, q) => a + q.nNew, 0), p = progressOf(decks);
+    const cards = decks.reduce((a, x) => a + (x.cardCount || 0), 0);
+    return `<li class="subject-row" style="--fc:${t ? topicColor(t) : "var(--line)"}">
+      <span class="subject-bar" aria-hidden="true"></span>
+      <div class="subject-main">
+        <button class="subject-link" data-act="home" data-id="${t ? t.id : "loose"}">${esc(t ? t.name : "Ohne Thema")}</button>
+        <p class="counts">${d ? `<span class="c-rev">${d} fällig</span>` : "0 fällig"} · ${n ? `<span class="c-new">${n} neu</span>` : "0 neu"} · ${decks.length} ${decks.length === 1 ? "Set" : "Sets"} · ${cards} Karten</p>
+        <div class="subject-progress" title="${p.pct} % Fortschritt"><i style="width:${p.pct}%"></i></div>
+      </div>
+      ${studyButtonHTML(decks, t ? `data-act="study-topic" data-id="${t.id}"` : 'data-act="study-loose"', "Lernen")}
+    </li>`;
+  };
+  const arch = archivedTopics();
+  return `<section class="overview" aria-labelledby="overview-h">
+    <h2 id="overview-h" class="sr">Deine Themen heute</h2>
+    <div class="all-card">
+      <div><p class="all-title">${due + fresh ? `Heute: ${due + fresh} ${due + fresh === 1 ? "Karte" : "Karten"}, etwa ${mins} Min.` : "Für heute ist alles erledigt."}</p>
+        <p class="muted small">${due + fresh ? `${due} fällig, ${fresh} neu. Thema für Thema, damit du nicht ständig umdenken musst.` : "Morgen geht es weiter. Im Archiv kannst du alte Themen auffrischen."}</p></div>
+      ${due + fresh ? `<button class="btn primary" data-act="study-all">Alles lernen</button>` : ""}
+    </div>
+    <ul class="subject-rows">${groups.map(row).join("")}
+      ${arch.length ? `<li class="subject-row archived" style="--fc:var(--line)"><span class="subject-bar" aria-hidden="true"></span>
+        <div class="subject-main"><button class="subject-link" data-act="home" data-id="archive">Archiv</button><p class="counts">${arch.map(t => esc(t.name)).join(", ")} · ruht, zählt nicht zu „heute“</p></div>
+        <button class="btn ghost" data-act="home" data-id="archive">Ansehen</button></li>` : ""}
+    </ul>
+  </section>`;
 }
 
 function dropHTML() {
@@ -1970,10 +2117,10 @@ function topicHTML(t) {
   const cards = decks.reduce((a, d) => a + (d.cardCount || 0), 0), nothing = !due && !fresh;
   const editing = state.topicEdit?.id === t.id;
   return `
-  <div class="topic">
+  <div class="topic ${t.archived ? "is-archived" : ""}" style="--fc:${topicColor(t)}">
     <div class="topic-head">
       <div class="deck-main">
-        <h3 class="topic-name">${esc(t.name)}</h3>
+        <h3 class="topic-name">${esc(t.name)}${t.archived ? ` <span class="archived-tag">im Archiv</span>` : ""}</h3>
         <p class="counts">${due ? `<span class="c-rev">${due} fällig</span>` : "0 fällig"} · ${fresh ? `<span class="c-new">${fresh} neu</span>` : "0 neu"} · ${decks.length} ${decks.length === 1 ? "Set" : "Sets"} · ${cards} Karten</p>
         ${masteryBar(progressOf(decks), "Thema")}
       </div>
@@ -1981,10 +2128,11 @@ function topicHTML(t) {
         ${(() => {
           const off = nothing ? extraOffer(decks) : null;
           return off?.ok ? `<button class="btn ghost" data-act="study-topic" data-extra="1" data-id="${t.id}" title="Die heutigen neuen Karten sitzen schon gut">${off.n} weitere neue</button>`
-            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study-topic" data-id="${t.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : "Thema lernen"}</button>`;
+            : `<button class="btn ${nothing ? "ghost" : "primary"}" data-act="study-topic" data-id="${t.id}" ${nothing ? "disabled" : ""}>${nothing ? "Für heute fertig" : t.archived ? "Auffrischen" : "Thema lernen"}</button>`;
         })()}
         <button class="btn ghost" data-act="topic-tree" data-id="${t.id}" aria-pressed="${state.treeOpen === t.id}">Themenbaum</button>
         <button class="btn ghost" data-act="topic-edit" data-id="${t.id}" aria-pressed="${editing}">Bearbeiten</button>
+        <button class="btn ghost" data-act="topic-archive" data-id="${t.id}">${t.archived ? "Zurückholen" : "Archivieren"}</button>
       </div>
     </div>
     ${editing ? topicEditHTML() : ""}
@@ -2113,6 +2261,9 @@ function topicEditHTML() {
   return `
   <div class="panel topic-edit">
     <label class="field">Name des Themas<input type="text" id="topic-name" value="${esc(te.name)}" maxlength="80" placeholder="z. B. Digitale Innovationsstrategie"></label>
+    <fieldset class="color-picks"><legend>Farbe</legend>
+      ${Array.from({ length: COLORS }, (_, i) => `<label class="swatch" style="--fc:var(--fach-${i})"><input type="radio" name="topic-color" value="${i}" ${(te.color ?? 0) === i ? "checked" : ""}><span class="sr">Farbe ${i + 1}</span></label>`).join("")}
+    </fieldset>
     ${outlineEditorHTML(te)}
     <fieldset class="deck-picks"><legend>Kartensets in diesem Thema</legend>
       ${state.decks.length ? state.decks.map(d => {
@@ -2717,8 +2868,8 @@ function studyHTML() {
     <div class="progress" aria-hidden="true"><i style="width:${(prog * 100).toFixed(1)}%"></i></div>
     ${!s.revealed && !s.main.length && !s.offerOff ? (() => { const ds = s.deckIds.map(deckById).filter(Boolean); return extraOfferHTML(extraOffer(ds), ds, { inline: true }); })() : ""}
     ${s.stamp && !s.revealed ? `<div class="stamp ${s.stamp.kind}" role="status"><b>${esc(s.stamp.title)}</b><span>Letzte Karte: ${esc(s.stamp.text)}</span></div>` : ""}
-    <article class="card ${flipTap ? "tap" : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
-      <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span><span>${esc(info)}</span></div>
+    <article class="card ${flipTap ? "tap" : ""} ${topicOfDeck(deck) ? "has-subject" : ""}" style="${topicOfDeck(deck) ? `--fc:${topicColor(topicOfDeck(deck))}` : ""}" aria-live="polite" ${flipTap ? 'data-act="reveal" title="Antippen zum Aufdecken"' : ""}>
+      <div class="card-meta"><span class="tag" style="color:${tagColor}">${tag}${dirNote}</span>${topicOfDeck(deck) && !s.topicId ? `<span class="subject-chip" style="--fc:${topicColor(topicOfDeck(deck))}">${esc(topicOfDeck(deck).name)}</span>` : ""}<span>${esc(info)}</span></div>
       ${s.editing ? `<div class="ce-row editing">${cardFormHTML("st", u.card.f, u.card.b, "", "st-save", "")}</div>` : `
       <div class="face front ${sizeF}"><span>${richText(front)}</span></div>
       ${s.revealed ? `<div class="face back ${sizeB}">${s.answer?.method === "keywords" ? highlightAnswer(back, s.answer) : richText(back)}</div>` : ""}`}
@@ -2756,7 +2907,7 @@ function doneHTML(s) {
       <p class="eyebrow">${esc(s.title)}</p>
       <p class="big">Für heute geschafft.</p>
       <p>${firsts.length} ${firsts.length === 1 ? "Karte" : "Karten"} in ${mins} Min. Beim ersten Versuch gewusst: <b>${pct(ok)}</b>.</p>
-      ${up || down ? `<p>${up} ${up === 1 ? "Karte" : "Karten"} in ein höheres Fach gerückt${down ? `, ${down} zurückgefallen` : ""}. ${(() => { const p = progressOf(decks); return `Fortschritt ${many ? "im Thema" : "im Stapel"}: <b>${p.pct} %</b>${p.tier ? ` (${p.tier.name})` : ""}.`; })()}</p>` : ""}
+      ${up || down ? `<p>${up} ${up === 1 ? "Karte" : "Karten"} in ein höheres Fach gerückt${down ? `, ${down} zurückgefallen` : ""}. ${(() => { const p = progressOf(decks); return `Fortschritt ${!many ? "im Stapel" : s.topicId ? "im Thema" : "insgesamt"}: <b>${p.pct} %</b>${p.tier ? ` (${p.tier.name})` : ""}.`; })()}</p>` : ""}
       ${s.badges.length ? `<p>Neue Abzeichen: <b>${s.badges.map(b => esc(b.name)).join(", ")}</b>.</p>` : ""}
       <p>${(() => { const st = streakInfo(); return st.todayOk ? `Tagesziel erreicht (${st.today}/${state.profile.goal}). Serie: <b>${st.n} ${st.n === 1 ? "Tag" : "Tage"}</b>.` : `Tagesziel: ${st.today}/${state.profile.goal} Antworten. Noch ${state.profile.goal - st.today} in einem anderen Stapel, oder hol dir 10 neue Karten.`; })()}</p>
       ${extraOfferHTML(extraOffer(decks), decks)}
@@ -2834,9 +2985,19 @@ document.addEventListener("click", e => {
   if (act === "study") startStudy(id, b.dataset.extra === "1");
   else if (act === "study-topic") startTopic(id, b.dataset.extra === "1");
   else if (act === "extra-new") addExtraNew();
+  else if (act === "home") { setHome(id); state.open = null; render(); window.scrollTo({ top: 0 }); }
+  else if (act === "study-all") startAll(b.dataset.extra === "1");
+  else if (act === "study-loose") startLoose(b.dataset.extra === "1");
+  else if (act === "topic-archive") {
+    const t = topicById(id); if (!t) return;
+    t.archived = !t.archived; saveTopics();
+    if (t.archived) { if (state.home === id) setHome("today"); toast(`„${t.name}“ ist im Archiv. Es zählt nicht mehr zu „heute“, der Lernstand bleibt.`); }
+    else { setHome(id); toast(`„${t.name}“ ist zurück.`); }
+    render();
+  }
   else if (act === "extra-no") { if (state.session) { state.session.offerOff = true; render(); } }
-  else if (act === "topic-new") { state.topicEdit = state.topicEdit && !state.topicEdit.id ? null : { id: null, name: "", outline: cloneOutline(null), deckIds: new Set(state.decks.filter(d => !d.topic || !topicById(d.topic)).map(d => d.id)), confirmDelete: false }; render(); $("#topic-name")?.focus(); }
-  else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, outline: cloneOutline(t.outline), deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false }; render(); }
+  else if (act === "topic-new") { state.topicEdit = state.topicEdit && !state.topicEdit.id ? null : { id: null, name: "", outline: cloneOutline(null), deckIds: new Set(state.decks.filter(d => !d.topic || !topicById(d.topic)).map(d => d.id)), confirmDelete: false, color: nextColor() }; render(); $("#topic-name")?.focus(); }
+  else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, outline: cloneOutline(t.outline), deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false, color: t.color ?? 0 }; render(); }
   else if (act?.startsWith("ol-") && state.topicEdit) {
     const te = state.topicEdit, nid = b.dataset.nid;
     if (act === "ol-add") outlineOp("add");
@@ -2875,7 +3036,8 @@ document.addEventListener("click", e => {
     const te = state.topicEdit, name = (te.name || "").trim().slice(0, 80);
     if (!name) { toast("Gib dem Thema einen Namen."); $("#topic-name")?.focus(); return; }
     let t = te.id && topicById(te.id);
-    if (t) t.name = name; else { t = { id: rid(), name, created: Date.now() }; state.topics.push(t); }
+    if (t) t.name = name; else { t = { id: rid(), name, created: Date.now() }; state.topics.push(t); setHome(t.id); }
+    t.color = te.color ?? t.color ?? nextColor();
     t.outline = cleanOutline(te.outline); delete t.tree;
     if (t.outline) state.treeOpen = t.id;
     for (const d of state.decks) {
@@ -2961,6 +3123,7 @@ document.addEventListener("change", e => {
   if (t.id === "file-new") { openImport(t.files[0]); t.value = ""; }
   else if (t.id?.startsWith("file-add-")) { openImport(t.files[0], t.dataset.id); t.value = ""; }
   else if (t.id === "file-restore") { openRestore(t.files[0]); t.value = ""; }
+  else if (t.name === "topic-color" && state.topicEdit) state.topicEdit.color = +t.value;
   else if (t.id === "cl-filter") { state.cardList.filter = t.value; state.cardList.limit = 50; state.cardList.edit = null; render(); $("#cl-filter")?.focus(); }
   else if (t.id === "imp-f" && d) { d.fc = +t.value; render(); }
   else if (t.id === "imp-b" && d) { d.bc = +t.value; render(); }
@@ -3057,7 +3220,11 @@ async function boot() {
   state.loading = false; render();
 }
 const normDeck = m => ({ ...m, dir: m.dir || "f", mode: m.mode || "auto", newPerDay: m.newPerDay ?? 20, retention: m.retention || 0.9, newCount: m.newCount || 0, revCount: m.revCount || 0 });
-const normTopics = list => { const out = Array.isArray(list) ? list : []; for (const t of out) if (!t.outline && t.tree) { t.outline = outlineFromText(t.tree); delete t.tree; } return out; };
+const normTopics = list => {
+  const out = Array.isArray(list) ? list : [];
+  out.forEach((t, i) => { if (!t.outline && t.tree) { t.outline = outlineFromText(t.tree); delete t.tree; } if (t.color == null) t.color = i % COLORS; t.archived = !!t.archived; });
+  return out;
+};
 async function loadAll() {
   // Read the revision first: anything written while loading shows up again at the next check, which is harmless.
   if (state.store.currentRev) SYNC.rev = await withTimeout(state.store.currentRev(), 10000);

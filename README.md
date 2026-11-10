@@ -70,7 +70,14 @@ Unter **„Karten“** an jedem Stapel siehst du alle Karten mit ihrem Fach. Du 
 
 ## Themen
 
-Mehrere Kartensets zu einem Fach lassen sich zu einem **Thema** bündeln, z. B. alle Sets einer Vorlesung. Auf der Übersicht steht das Thema mit Summen und Gesamtfortschritt über seinen Sets. **„Thema lernen“** startet eine Runde über alle Sets. Neue Karten kommen abwechselnd aus den Sets, und jedes Set behält sein eigenes Tageslimit und seine Einstellungen.
+Mehrere Kartensets zu einem Fach lassen sich zu einem **Thema** bündeln, z. B. alle Sets einer Vorlesung. **„Thema lernen“** startet eine Runde über alle Sets. Neue Karten kommen abwechselnd aus den Sets, und jedes Set behält sein eigenes Tageslimit und seine Einstellungen.
+
+**Mehrere Fächer übersichtlich:** Sobald es ein Thema gibt, stehen oben Reiter: **Heute**, ein Reiter pro Thema (mit der Zahl fälliger Karten), **Ohne Thema** und **Archiv**. Die App merkt sich den zuletzt offenen Reiter.
+
+- **Heute** zeigt eine Zeile pro Thema mit Farbe, fälligen und neuen Karten und Fortschritt. Die Sets bleiben eingeklappt, ein Klick auf den Namen öffnet das Thema.
+- **„Alles lernen“** lernt alles Fällige aller Themen, und zwar Thema für Thema statt durcheinander, weil ständiges Umdenken zwischen Fächern anstrengt. Daneben steht, wie lange das etwa dauert, gerechnet aus deiner bisherigen Antwortzeit.
+- **Farbe:** Jedes Thema hat eine Farbe (wählbar unter „Bearbeiten“). Beim Lernen zeigt jede Karte ihr Thema und einen farbigen Rand.
+- **Archiv:** „Archivieren“ legt ein abgeschlossenes Thema still. Es zählt nicht mehr zu „heute“, zu „Alles lernen“ und zum Abzeichen „Alles erledigt“. Der Lernstand bleibt, „Auffrischen“ lernt es trotzdem, und „Zurückholen“ macht es wieder aktiv.
 
 **Themenbaum:** Unter „Bearbeiten“ kannst du einem Thema eine Gliederung geben. Du baust sie direkt im Editor auf (Enter: nächster Zweig, Tab: einrücken, Shift+Tab: ausrücken, Knöpfe zum Verschieben und Löschen) oder fügst sie über „Als Text einfügen“ ein, als Baum (`├──`, `└──`) oder als eingerückte Liste. `[cite: …]`-Reste werden ignoriert. Jeder Zweig hat eine feste ID, Umbenennen und Verschieben ändern daran nichts. Unter dem Editor schlägt die App neue Zweige vor: Namen und Fachbegriffe, die in mehreren Karten ohne Zweig vorkommen, z. B. „Brown & Hagel“. Ein Klick fügt den Zweig hinzu. Die App ordnet jede Karte automatisch dem Zweig zu, dessen Begriffe sie am stärksten erwähnt. Der Teil vor einem Doppelpunkt („Porter: …“) zählt doppelt, und Begriffe, die in sehr vielen Karten vorkommen, zählen weniger. Unter „Themenbaum“ siehst du pro Zweig Karten, fällige Karten, Fortschritt und Fächer. Der schwächste Zweig ist markiert. Karten, die zu keinem Zweig passen, stehen gesammelt darunter. Oft fehlt dafür ein Zweig im Baum.
 
