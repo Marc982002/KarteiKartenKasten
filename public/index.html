@@ -617,13 +617,15 @@ function setTheme(th) {
 /* ---------- Settings for all devices ----------
    Stored in the profile, so phone and computer agree (unlike theme and language, which belong to one device). */
 // deck: what a new deck starts with (the values a deck had before this setting existed).
-const PREF_DEFAULTS = { dayStart: 4, deck: { newPerDay: 20, dir: "f", mode: "auto", retention: 0.9 } };
+// quiet: no badges, streak or offers of extra new cards on screen (badges are still recorded in the background).
+const PREF_DEFAULTS = { dayStart: 4, quiet: false, deck: { newPerDay: 20, dir: "f", mode: "auto", retention: 0.9 } };
 const clampInt = (v, lo, hi, fallback) => { const n = Math.round(+v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback; };
 function normPrefs(p) {
   const src = p && typeof p === "object" ? p : {}, D = PREF_DEFAULTS.deck, d = src.deck && typeof src.deck === "object" ? src.deck : {};
   const ret = +d.retention;
   return { ...PREF_DEFAULTS, ...src,
     dayStart: clampInt(src.dayStart, 0, 6, PREF_DEFAULTS.dayStart),
+    quiet: src.quiet === true,
     deck: {
       newPerDay: clampInt(d.newPerDay, 0, 500, D.newPerDay),
       dir: ["f", "r", "b"].includes(d.dir) ? d.dir : D.dir,
@@ -631,6 +633,7 @@ function normPrefs(p) {
       retention: Number.isFinite(ret) && ret > 0 ? Math.min(0.97, Math.max(0.75, Math.round(ret * 100) / 100)) : D.retention
     } };
 }
+const quiet = () => prefs().quiet;
 const setDeckPref = (k, v) => setPref("deck", { ...prefs().deck, [k]: v });
 // Puts the default values on existing decks. The direction stays: changing it would add or drop a direction's progress.
 function applyDeckDefaults(decks) {
@@ -1295,7 +1298,7 @@ function recordAnswer(deck, u, g, now, info = null) {
   }
   days[day] = (days[day] || 0) + 1;
   markLog(); markProfile();
-  if (days[day] === state.profile.goal) toast(T("Tagesziel erreicht. Serie: {days}.", { days: Tn(streakInfo().n, "{n} Tag", "{n} Tage") }));
+  if (days[day] === state.profile.goal && !quiet()) toast(T("Tagesziel erreicht. Serie: {days}.", { days: Tn(streakInfo().n, "{n} Tag", "{n} Tage") }));
 }
 function unrecordAnswer() {
   const day = state.log.day;
@@ -1413,7 +1416,7 @@ function checkBadges({ silent = false } = {}) {
   if (!fresh.length) return [];
   for (const b of fresh) have[b.id] = Date.now();
   markProfile();
-  if (!silent) toast(Tn(fresh.length, "Neues Abzeichen: {list}", "Neue Abzeichen: {list}", { list: fresh.map(b => T(b.name)).join(", ") }));
+  if (!silent && !quiet()) toast(Tn(fresh.length, "Neues Abzeichen: {list}", "Neue Abzeichen: {list}", { list: fresh.map(b => T(b.name)).join(", ") }));
   return fresh;
 }
 // "Alles erledigt": nothing due and no new-card allowance left in any deck today.
@@ -1651,6 +1654,7 @@ function todayNewStats(decks) {
 }
 // Whether more new cards can be offered. null: nothing to offer at all (no unseen cards, new cards switched off).
 function extraOffer(decks) {
+  if (quiet()) return null;
   const qs = decks.map(buildQueue);
   const open = decks.filter((d, i) => (d.newPerDay ?? 20) > 0 && qs[i].unseen > 0);
   if (!open.length || qs.some(q => q.nNew > 0)) return null; // today's regular new cards come first
@@ -2055,6 +2059,7 @@ function uiSettingsHTML() {
       <select id="pref-daystart">${[0, 1, 2, 3, 4, 5, 6].map(h => `<option value="${h}" ${prefs().dayStart === h ? "selected" : ""}>${h ? T("{n} Uhr", { n: h }) : T("Mitternacht")}</option>`).join("")}</select>
       <span class="hint">${T("Wer nach Mitternacht lernt, zählt bis zu dieser Uhrzeit noch zum Vortag: für die Serie, die Tageslimits und was heute fällig ist.")}</span>
     </label>
+    <label class="check"><input type="checkbox" id="pref-quiet" ${quiet() ? "checked" : ""}> <span><b>${T("Ruhiger Modus")}</b><br><span class="muted small">${T("Ohne Abzeichen, Serie und das Angebot weiterer neuer Karten. Abzeichen werden im Hintergrund weiter vergeben und sind wieder da, wenn du den Modus ausschaltest.")}</span></span></label>
     ${deckDefaultsHTML()}
     ${backupHTML()}
     ${howHTML()}
@@ -2196,11 +2201,11 @@ function todayHTML() {
         <select id="goal-sel">${goals.map(x => `<option value="${x}" ${x === goal ? "selected" : ""}>${T("{n} Antworten", { n: x })}</option>`).join("")}</select>
       </label>
     </div>
-    <div class="streak">
+    ${quiet() ? "" : `<div class="streak">
       <span class="num" style="color:var(--ink)">${Tn(n, "{n} Tag", "{n} Tage")}</span>
       <span>${n === 0 ? T("Erreiche heute dein Ziel, um eine Serie zu starten.") : todayOk ? T("Serie, heute geschafft.") : Tn(goal - today, "Serie. Heute noch {n} Antwort, dann hält sie.", "Serie. Heute noch {n} Antworten, dann hält sie.")}</span>
     </div>
-    <div class="week" aria-label="${T("Tagesziel der letzten 7 Tage")}">${week}</div>
+    <div class="week" aria-label="${T("Tagesziel der letzten 7 Tage")}">${week}</div>`}
     ${(() => {
       const dl = state.profile.daily[dayKey()] || {}, startedToday = state.decks.reduce((a, d) => a + (d.newDay === dayKey() ? Math.max(0, d.newCount || 0) : 0), 0);
       const parts = [startedToday && T("<b>{n}</b> neue Karten angefangen", { n: startedToday }), dl.learned && T("<b>{n}</b> gelernt", { n: dl.learned }), dl.up && T("<b>{n}</b> eine Stufe weiter", { n: dl.up })].filter(Boolean);
@@ -2507,7 +2512,7 @@ function kastenHTML(deck) {
 }
 
 function badgesHTML() {
-  if (!state.decks.length) return "";
+  if (!state.decks.length || quiet()) return "";
   const have = state.profile.badges;
   const list = [...BADGES].sort((a, b) => (have[b.id] ? 1 : 0) - (have[a.id] ? 1 : 0));
   const n = BADGES.filter(b => have[b.id]).length;
@@ -3079,8 +3084,8 @@ function doneHTML(s) {
       <p class="big">${T("Für heute geschafft.")}</p>
       <p>${Tn(firsts.length, "{n} Karte in {m} Min.", "{n} Karten in {m} Min.", { m: mins })} ${T("Beim ersten Versuch gewusst:")} <b>${pct(ok)}</b>.</p>
       ${up || down ? `<p>${Tn(up, "{n} Karte in ein höheres Fach gerückt", "{n} Karten in ein höheres Fach gerückt")}${down ? ", " + T("{n} zurückgefallen", { n: down }) : ""}. ${(() => { const p = progressOf(decks); return `${!many ? T("Fortschritt im Stapel:") : s.topicId ? T("Fortschritt im Thema:") : T("Fortschritt insgesamt:")} <b>${pctN(p.pct)}</b>${p.tier ? ` (${T(p.tier.name)})` : ""}.`; })()}</p>` : ""}
-      ${s.badges.length ? `<p>${T("Neue Abzeichen:")} <b>${s.badges.map(b => esc(T(b.name))).join(", ")}</b>.</p>` : ""}
-      <p>${(() => { const st = streakInfo(); return st.todayOk ? `${T("Tagesziel erreicht ({a}/{b}).", { a: st.today, b: state.profile.goal })} ${T("Serie:")} <b>${Tn(st.n, "{n} Tag", "{n} Tage")}</b>.` : T("Tagesziel: {a}/{b} Antworten. Noch {c} in einem anderen Stapel, oder hol dir 10 neue Karten.", { a: st.today, b: state.profile.goal, c: state.profile.goal - st.today }); })()}</p>
+      ${s.badges.length && !quiet() ? `<p>${T("Neue Abzeichen:")} <b>${s.badges.map(b => esc(T(b.name))).join(", ")}</b>.</p>` : ""}
+      <p>${(() => { const st = streakInfo(); return quiet() ? T("Antworten heute: {a}/{b}.", { a: st.today, b: state.profile.goal }) : st.todayOk ? `${T("Tagesziel erreicht ({a}/{b}).", { a: st.today, b: state.profile.goal })} ${T("Serie:")} <b>${Tn(st.n, "{n} Tag", "{n} Tage")}</b>.` : T("Tagesziel: {a}/{b} Antworten. Noch {c} in einem anderen Stapel, oder hol dir 10 neue Karten.", { a: st.today, b: state.profile.goal, c: state.profile.goal - st.today }); })()}</p>
       ${extraOfferHTML(extraOffer(decks), decks)}
       <p class="muted">${newTomorrow > 0 ? T("Morgen warten etwa {r} Wiederholungen und bis zu {n} neue Karten.", { r: tomorrow, n: newTomorrow }) : T("Morgen warten etwa {r} Wiederholungen.", { r: tomorrow })} ${T("Am meisten bringt es, jeden Tag kurz zu lernen.")}</p>
       <div class="row-actions">
@@ -3306,6 +3311,7 @@ document.addEventListener("change", e => {
   else if (t.name === "topic-color" && state.topicEdit) state.topicEdit.color = +t.value;
   else if (t.name === "ui-theme") setTheme(t.value);
   else if (t.id === "pref-daystart") setPref("dayStart", +t.value);
+  else if (t.id === "pref-quiet") setPref("quiet", t.checked);
   else if (t.id === "pref-new") setDeckPref("newPerDay", +t.value);
   else if (t.id === "pref-dir") setDeckPref("dir", t.value);
   else if (t.id === "pref-mode") setDeckPref("mode", t.value);
@@ -3456,6 +3462,8 @@ var EN = {
   "Wie das System": "Same as system", "Hell": "Light", "Dunkel": "Dark",
   "Auf diesem Gerät": "On this device", "Für alle Geräte": "On all devices",
   "Neuer Lerntag beginnt um": "A new study day starts at",
+  "Ruhiger Modus": "Quiet mode", "Antworten heute: {a}/{b}.": "Answers today: {a}/{b}.",
+  "Ohne Abzeichen, Serie und das Angebot weiterer neuer Karten. Abzeichen werden im Hintergrund weiter vergeben und sind wieder da, wenn du den Modus ausschaltest.": "No badges, streak or offers of extra new cards. Badges are still earned in the background and come back when you turn quiet mode off.",
   "Deine letzte heruntergeladene Sicherung ist von {when}.": "Your last downloaded backup is from {when}.",
   "Du hast noch nie eine Sicherung heruntergeladen.": "You have never downloaded a backup.", "Jetzt sichern": "Back up now",
   "Neue Stapel starten mit": "New decks start with", "alle Stapel": "all decks", "Stapel in „{name}“": "decks in “{name}”",
