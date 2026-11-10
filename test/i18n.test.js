@@ -27,7 +27,7 @@ test("jeder Text in T() und Tn() hat eine englische Fassung", () => {
   assert.deepEqual(missing, []);
   // Every T( call starts with a plain "…" text, otherwise the check above would miss it.
   // Texts from the lists (grades, boxes, badges …) are checked in the next test.
-  const LISTS = /^T\((s, vars|n === 1 \? one|GRADE\[|FAECHER\[|p\.tier\.name|next\.name|b\.name|b\.hint|d\.delimName|ENGINE)/;
+  const LISTS = /^T\((s, vars|n === 1 \? one|GRADE\[|FAECHER\[|p\.tier\.name|next\.name|b\.name|b\.hint|d\.delimName|ENGINE|label$)/;
   const dynamic = [...code.matchAll(/\bT\(\s*[^"\s)][^)]{0,20}/g)].map(m => m[0]).filter(c => !LISTS.test(c));
   assert.deepEqual(dynamic, [], "T() bitte immer mit \"Text\" aufrufen");
   assert.equal([...code.matchAll(/\bTn\(/g)].length, [...code.matchAll(new RegExp(String.raw`\bTn\([^"]*?` + STR + String.raw`,\s*` + STR, "g"))].length, "Tn() mit zwei Texten aufrufen");
@@ -36,13 +36,13 @@ test("jeder Text in T() und Tn() hat eine englische Fassung", () => {
 test("Listen mit Texten (Bewertungen, Fächer, Abzeichen …) sind übersetzt", () => {
   const en = app.get("EN");
   const texts = app.get(`[...GRADE.filter(Boolean), ...FAECHER.flatMap(f => [f.name, f.sub]), ...TIERS.map(t => t.name),
-    ...BADGES.flatMap(b => [b.name, b.hint]), ...DELIMS.map(d => d[1]), ENGINE]`);
+    ...BADGES.flatMap(b => [b.name, b.hint]), ...DELIMS.map(d => d[1]), ...DIRS.map(d => d[1]), ...MODES.map(m => m[1]), ENGINE]`);
   assert.deepEqual(texts.filter(k => en[k] == null), []);
 });
 
 test("englische Texte haben dieselben Platzhalter und keine übrigen Einträge", () => {
   const en = app.get("EN"), used = keysInCode();
-  for (const k of app.get(`[...GRADE.filter(Boolean), ...FAECHER.flatMap(f => [f.name, f.sub]), ...TIERS.map(t => t.name), ...BADGES.flatMap(b => [b.name, b.hint]), ...DELIMS.map(d => d[1]), "FSRS-6 über die offizielle Bibliothek ts-fsrs", "FSRS-5 (eingebaute Version, ts-fsrs fehlt: einmal npm install ausführen)"]`)) used.add(k);
+  for (const k of app.get(`[...GRADE.filter(Boolean), ...FAECHER.flatMap(f => [f.name, f.sub]), ...TIERS.map(t => t.name), ...BADGES.flatMap(b => [b.name, b.hint]), ...DELIMS.map(d => d[1]), ...DIRS.map(d => d[1]), ...MODES.map(m => m[1]), "FSRS-6 über die offizielle Bibliothek ts-fsrs", "FSRS-5 (eingebaute Version, ts-fsrs fehlt: einmal npm install ausführen)"]`)) used.add(k);
   for (const [k, v] of Object.entries(en)) assert.deepEqual(placeholders(v), placeholders(k), `Platzhalter in „${k}“`);
   assert.deepEqual(Object.keys(en).filter(k => !used.has(k)), [], "Einträge, die nirgends mehr gebraucht werden");
 });
