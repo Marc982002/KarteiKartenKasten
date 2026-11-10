@@ -1,139 +1,152 @@
 # Karteikasten
 
-Karteikarten aus CSV-Dateien lernen, auf dem eigenen Rechner. Die App zeigt jede Karte kurz bevor du sie vergessen würdest (FSRS-6 über die Bibliothek [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs)).
+**English** · [Deutsch](README.de.md)
 
-## Starten
+Study flashcards from CSV files, on your own computer. The app shows you each card just before you would forget it (FSRS-6 via the [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) library).
 
-Voraussetzung: Node.js 22.13 oder neuer (`node -v`).
+The app is available in English and German. Pick the language with the gear ⚙︎ at the top (see [Settings](#settings-appearance-and-language)).
 
-Einmalig die Abhängigkeit installieren:
+## Getting started
+
+You need Node.js 22.13 or newer (`node -v`).
+
+Install the dependency once:
 
 ```bash
 npm install
 ```
 
-Server starten:
+Start the server:
 
 ```bash
 npm start
 ```
 
-Dann im Browser öffnen: <http://localhost:4321>
+Then open <http://localhost:4321> in your browser.
 
-Beenden mit `Ctrl+C` im Terminal.
+Stop it with `Ctrl+C` in the terminal.
 
-## Karten und Abfrage
+## Cards and question types
 
-CSV mit Spalte 1 = Vorderseite, Spalte 2 = Rückseite. Komma, Semikolon und Tab werden erkannt.
+A CSV file with column 1 = front, column 2 = back. Commas, semicolons and tabs are recognised.
 
-Abfragearten pro Stapel (Einstellungen → Abfrageart):
+Question types per deck (Settings → Question type):
 
-- **Automatisch** (Standard): neue Karten als Multiple Choice, danach Antwort eintippen.
-- **Immer eintippen**, **Immer Multiple Choice**, **Nur aufdecken**.
-- **Eintippen, selbst vergleichen**: Du schreibst deine Antwort, die App zeigt die Lösung daneben, du bewertest selbst.
+- **Automatic** (default): new cards as multiple choice, after that you type the answer.
+- **Always type**, **Always multiple choice**, **Just reveal**.
+- **Type, compare yourself**: you write your answer, the app shows the solution next to it, and you rate yourself.
 
-Beim Eintippen prüft die App:
+When you type an answer, the app checks:
 
-- **Kurze Antworten** (bis 60 Zeichen) auf Übereinstimmung, mit Toleranz für Tippfehler, Akzente und Artikel.
-- **Lange Antworten** über Schlüsselbegriffe. Gefundene Begriffe werden grün markiert, fehlende rot.
+- **Short answers** (up to 60 characters) for a match, tolerating typos, accents and articles.
+- **Long answers** by key terms. Terms you got are marked green, missing ones red.
 
-Die Begriffe sucht die App automatisch heraus (bis zu 7, Fachbegriffe und Substantive bevorzugt). Dann schlägt sie ab 60 % Treffern „Gut“ vor, ab 30 % „Schwer“, sonst „Nochmal“.
+The app picks the terms automatically (up to 7, preferring technical terms and nouns). It suggests "Good" from 60% of the terms, "Hard" from 30%, otherwise "Again".
 
-Du kannst die Begriffe auch selbst festlegen, mit Sternchen oder Fettschrift auf der Rückseite. Dann zählen nur diese, und es braucht 80 % für „Gut“ und 50 % für „Schwer“:
+You can also set the terms yourself with asterisks or bold on the back. Then only those count, and it takes 80% for "Good" and 50% for "Hard":
 
 ```
-Photosynthese;Umwandlung von *Lichtenergie* in **chemische Energie**
+Photosynthesis;Conversion of *light energy* into **chemical energy**
 ```
 
-Steht hinter einem Begriff eine Übersetzung in Klammern, reicht eins von beiden: Bei `Scope (Reichweite)` zählt „Scope“ genauso wie „Reichweite“. Klammern mit Quellen oder Beispielen („vgl. …“, „z. B. …“, „wie …“) werden ignoriert.
+If a term is followed by a translation in brackets, either one is enough: with `Scope (Reichweite)`, "Scope" counts just like "Reichweite". Brackets holding sources or examples ("vgl. …", "e.g. …", "such as …") are ignored.
 
-Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt die App nicht. Die Bewertung ist deshalb immer nur ein Vorschlag.
+The check only looks for the terms, not the meaning. The app does not recognise synonyms, so its rating is always just a suggestion.
 
-## Mehr neue Karten als das Tageslimit
+## More new cards than the daily limit
 
-Das Tageslimit schützt vor allem die nächsten Tage, denn jede neue Karte bringt später Wiederholungen. Läuft es heute gut, bietet die App deshalb weitere neue Karten an, in Päckchen zu 5:
+The daily limit mainly protects the coming days, because every new card brings reviews later. So when today is going well, the app offers more new cards in packs of 5:
 
-- **Wann:** Die regulären neuen Karten von heute sind dran gewesen, keine Wiederholung ist mehr offen, und mindestens drei Viertel der heutigen neuen Karten haben die Lernphase verlassen. Das Angebot erscheint in der Lernrunde über der Karte, auf dem Abschlussbildschirm und an Stapel oder Thema als „5 weitere neue“.
-- **Bremse:** Kein Angebot, wenn du bei den Wiederholungen der heutigen neuen Karten unter 70 % gewusst hast (gezählt ab 6 Wiederholungen) oder wenn du heute schon doppelt so viele neue Karten wie dein Tageslimit hast. Der Abschlussbildschirm sagt dann, warum.
-- **Preis:** Neben dem Knopf steht, wie viele Wiederholungen das Päckchen etwa in den nächsten 7 Tagen bringt. Grundlage ist dein eigener Verlauf, oder eine Simulation, solange der Verlauf noch zu kurz ist.
-- **Einstreuen:** Die neuen Karten kommen zwischen die Karten, die gerade in der Lernphase sind. Gehört der Stapel zu einem Thema mit Themenbaum, kommen sie abwechselnd aus verschiedenen Zweigen (bei Themen ohne Baum aus verschiedenen Sets), damit Ähnliches nicht direkt nacheinander kommt.
+- **When:** today's regular new cards have come up, no review is left, and at least three quarters of today's new cards have left the learning phase. The offer appears above the card during a round, on the finish screen, and on a deck or subject as "5 more new".
+- **Brake:** no offer if you knew less than 70% on the repeats of today's new cards (counted from 6 repeats), or if you already have twice your daily limit of new cards today. The finish screen says why.
+- **Cost:** next to the button you see roughly how many reviews the pack brings over the next 7 days. This is based on your own history, or on a simulation while the history is still too short.
+- **Mixing in:** the new cards go between the cards that are currently in the learning phase. If the deck belongs to a subject with a topic tree, they are taken from different branches in turn (from different sets for subjects without a tree), so similar items don't come back to back.
 
-Hintergrund: Erst sollen neue Karten einige Male sicher abgerufen werden, dann zählt vor allem das verteilte Wiederholen (Rawson & Dunlosky 2011). Wie groß ein Päckchen ist, macht wenig aus, solange die Abstände stimmen (Nakata & Webb 2016). Bedeutungsähnliches stört sich gegenseitig, wenn es zusammen gelernt wird. Die Schwellen 75 %, 70 % und „doppelt“ sind begründete Startwerte und lassen sich anhand des Verlaufs anpassen.
+Background: new cards should first be recalled correctly a few times, after that spaced repetition matters most (Rawson & Dunlosky 2011). The size of a pack matters little as long as the spacing is right (Nakata & Webb 2016). Items with similar meanings interfere with each other when learned together. The thresholds 75%, 70% and "twice" are reasoned starting values and can be tuned from the history.
 
-## Karten bearbeiten
+## Editing cards
 
-Unter **„Karten“** an jedem Stapel siehst du alle Karten mit ihrem Fach. Du kannst sie durchsuchen, bearbeiten, löschen, einzeln hinzufügen und aussetzen. Beim Bearbeiten bleibt der Lernstand erhalten. Wer die Frage stark umschreibt, kann ihn per Häkchen zurücksetzen.
+Under **"Cards"** on each deck you see all cards with their box. You can search, edit, delete, add and suspend them. Editing keeps the progress. If you rewrite a question heavily, you can reset its progress with a checkbox.
 
-- **Problemkarten:** Eine Karte, die du 4-mal oder öfter vergessen hast, ist als Problemkarte markiert. Das liegt meist an der Karte selbst, sie ist zu lang oder fragt zu viel auf einmal. Der Filter „Problemkarten“ zeigt sie alle, die häufigste zuerst.
-- **Aussetzen:** Eine ausgesetzte Karte kommt nicht mehr dran und zählt nicht zum Fortschritt, bis du sie wieder aufnimmst. Ihr Lernstand bleibt erhalten.
-- **Beim Lernen:** Nach dem Aufdecken öffnet „Karte bearbeiten“ (Taste `E`) die Karte zum Korrigieren. Bei Problemkarten erscheint ein Hinweis mit „Bearbeiten“ und „Aussetzen“.
+- **Problem cards:** a card you have forgotten 4 times or more is marked as a problem card. That is usually down to the card itself: it is too long or asks too much at once. The "Problem cards" filter shows them all, most forgotten first.
+- **Suspend:** a suspended card no longer comes up and does not count toward progress until you bring it back. Its progress is kept.
+- **While studying:** after revealing, "Edit card" (key `E`) opens the card for corrections. Problem cards show a note with "Edit" and "Suspend".
 
-## Themen
+## Subjects
 
-Mehrere Kartensets zu einem Fach lassen sich zu einem **Thema** bündeln, z. B. alle Sets einer Vorlesung. **„Thema lernen“** startet eine Runde über alle Sets. Neue Karten kommen abwechselnd aus den Sets, und jedes Set behält sein eigenes Tageslimit und seine Einstellungen.
+Several card sets on one topic can be bundled into a **subject**, e.g. all sets of one lecture. **"Study subject"** starts a round across all sets. New cards are taken from the sets in turn, and each set keeps its own daily limit and settings.
 
-**Mehrere Fächer übersichtlich:** Sobald es ein Thema gibt, stehen oben Reiter: **Heute**, ein Reiter pro Thema (mit der Zahl fälliger Karten), **Ohne Thema** und **Archiv**. Die App merkt sich den zuletzt offenen Reiter.
+**Many subjects at a glance:** as soon as there is a subject, tabs appear at the top: **Today**, one tab per subject (with the number of due cards), **No subject** and **Archive**. The app remembers the last tab you had open.
 
-- **Heute** zeigt eine Zeile pro Thema mit Farbe, fälligen und neuen Karten und Fortschritt. Die Sets bleiben eingeklappt, ein Klick auf den Namen öffnet das Thema.
-- **„Alles lernen“** lernt alles Fällige aller Themen, und zwar Thema für Thema statt durcheinander, weil ständiges Umdenken zwischen Fächern anstrengt. Daneben steht, wie lange das etwa dauert, gerechnet aus deiner bisherigen Antwortzeit.
-- **Farbe:** Jedes Thema hat eine Farbe (wählbar unter „Bearbeiten“). Beim Lernen zeigt jede Karte ihr Thema und einen farbigen Rand.
-- **Archiv:** „Archivieren“ legt ein abgeschlossenes Thema still. Es zählt nicht mehr zu „heute“, zu „Alles lernen“ und zum Abzeichen „Alles erledigt“. Der Lernstand bleibt, „Auffrischen“ lernt es trotzdem, und „Zurückholen“ macht es wieder aktiv.
+- **Today** shows one row per subject with its colour, due and new cards and progress. The sets stay collapsed; click the name to open the subject.
+- **"Study everything"** studies everything due across all subjects, one subject after another rather than mixed, because switching between subjects all the time is tiring. Next to it you see roughly how long it will take, based on your past answer times.
+- **Colour:** every subject has a colour (choose it under "Edit"). While studying, each card shows its subject and a coloured edge.
+- **Archive:** "Archive" puts a finished subject to rest. It no longer counts toward today, "Study everything" or the "All done" badge. Its progress is kept, "Refresh" still studies it, and "Restore" makes it active again.
 
-**Themenbaum:** Unter „Bearbeiten“ kannst du einem Thema eine Gliederung geben. Du baust sie direkt im Editor auf (Enter: nächster Zweig, Tab: einrücken, Shift+Tab: ausrücken, Knöpfe zum Verschieben und Löschen) oder fügst sie über „Als Text einfügen“ ein, als Baum (`├──`, `└──`) oder als eingerückte Liste. `[cite: …]`-Reste werden ignoriert. Jeder Zweig hat eine feste ID, Umbenennen und Verschieben ändern daran nichts. Unter dem Editor schlägt die App neue Zweige vor: Namen und Fachbegriffe, die in mehreren Karten ohne Zweig vorkommen, z. B. „Brown & Hagel“. Ein Klick fügt den Zweig hinzu. Die App ordnet jede Karte automatisch dem Zweig zu, dessen Begriffe sie am stärksten erwähnt. Der Teil vor einem Doppelpunkt („Porter: …“) zählt doppelt, und Begriffe, die in sehr vielen Karten vorkommen, zählen weniger. Unter „Themenbaum“ siehst du pro Zweig Karten, fällige Karten, Fortschritt und Fächer. Der schwächste Zweig ist markiert. Karten, die zu keinem Zweig passen, stehen gesammelt darunter. Oft fehlt dafür ein Zweig im Baum.
+**Topic tree:** under "Edit" you can give a subject an outline. Build it directly in the editor (Enter: next branch, Tab: indent, Shift+Tab: outdent, buttons to move and delete) or paste it via "Paste as text", either as a tree (`├──`, `└──`) or as an indented list. Leftover `[cite: …]` markers are ignored. Every branch has a fixed ID; renaming and moving don't change it. Below the editor the app suggests new branches: names and technical terms that appear in several cards without a branch, e.g. "Brown & Hagel". One click adds the branch. The app assigns each card automatically to the branch whose terms it mentions most. The part before a colon ("Porter: …") counts double, and terms that appear in very many cards count less. Under "Topic tree" you see cards, due cards, progress and boxes per branch. The weakest branch is marked. Cards that don't fit any branch are listed below; often the tree is missing a branch for them.
 
-**Karten von Hand zuordnen:** In der Baumansicht klappt „Karten anzeigen“ die Karten eines Zweigs auf. Über das Auswahlmenü neben jeder Karte ordnest du sie einem anderen Zweig zu, keinem Zweig oder wieder automatisch. „Unsichere Zuordnungen prüfen“ listet Karten, die fast gleich gut zu zwei Zweigen passen. Ein Klick auf den richtigen Zweig legt sie fest. Handzuordnungen haben Vorrang, bleiben beim Umbenennen und Verschieben eines Zweigs erhalten und werden ignoriert, wenn der Zweig gelöscht wird.
+**Assigning cards by hand:** in the tree view, "Show cards" expands the cards of a branch. With the menu next to each card you move it to another branch, to no branch, or back to automatic. "Check unsure assignments" lists cards that fit two branches almost equally well. One click on the right branch fixes it there. Manual assignments take priority, survive renaming and moving a branch, and are ignored if the branch is deleted.
 
-Ein Thema legst du über **„Neues Thema“** an. Die Zuordnung änderst du unter „Bearbeiten“ am Thema, in den Einstellungen eines Sets oder schon beim Import. Wird ein Thema gelöscht, bleiben seine Sets erhalten.
+Create a subject with **"New subject"**. Change which subject a set belongs to under "Edit" on the subject, in a set's settings, or right when importing. Deleting a subject keeps its sets.
 
-## Fortschritt und Abzeichen
+## Progress and badges
 
-- **Karteikasten mit Fächern** (Statistik eines Stapels): Jede Karte liegt in einem von fünf Fächern, je nachdem, wie lange sie laut Algorithmus sicher sitzt (unter 1 Tag bis über 3 Monate). Gewusste Karten rücken weiter, vergessene fallen zurück.
-- **Fortschritt pro Stapel** in drei Stufen: *angefangen* (mindestens einmal gelernt), *gelernt* (kurze Lernrunden geschafft, kommt erst nach Tagen wieder) und *gefestigt* (sitzt mindestens 3 Wochen). Dazu die Medaillen Bronze (25 %), Silber (50 %) und Gold (75 %).
-- **Stempel nach jeder Karte:** Über der nächsten Karte steht, was die letzte Bewertung bewirkt hat, z. B. „Gelernt ✓ – wieder in 1 Tag“ oder „Fach 3 ↑ – sitzt jetzt etwa 2 Wochen“.
-- **Tagesbilanz** auf der Übersicht: neue Karten angefangen, gelernt und eine Stufe weiter.
-- **Deine Entwicklung:** Beim Aufdecken zeigt die App deine bisherigen Bewertungen zu dieser Karte, den Vergleich mit der letzten Antwort („Letztes Mal 3 von 7 Begriffen, heute 6 von 7“) und aufklappbar deine letzte Antwort.
+- **Card box with boxes** (a deck's statistics): every card sits in one of five boxes, depending on how long it is expected to stick according to the algorithm (from under 1 day to over 3 months). Cards you know move up, forgotten ones fall back.
+- **Progress per deck** in three stages: *started* (studied at least once), *learned* (got through the short learning steps, comes back only after days) and *solid* (sticks for at least 3 weeks). Plus the medals bronze (25%), silver (50%) and gold (75%).
+- **Stamp after each card:** above the next card you see what your last rating did, e.g. "Learned ✓ – again in 1 day" or "Box 3 ↑ – now sticks for about 2 weeks".
+- **Daily summary** on the overview: new cards started, learned, and moved up a stage.
+- **Your progress on this card:** when revealing, the app shows your earlier ratings of this card, a comparison with your last answer ("Last time 3 of 7 terms, today 6 of 7") and, expandable, your last answer.
 
-Pro Antwort speichert die App im Verlauf (`log-<Datum>`): Karte, Richtung, Bewertung, Zeitpunkt, Set und zusätzlich den getippten Text, gefundene und fehlende Begriffe, den Vorschlag der App, die Abfrageart und die Antwortdauer. Das ist die Grundlage für spätere Verbesserungen wie gelernte Synonyme oder persönliche Schwellen.
-- **16 Abzeichen** für Regelmäßigkeit und Meilensteine, z. B. Serien, Antworten insgesamt, „Alles erledigt“ oder die erste Karte in Fach 5.
+For every answer the app stores in its history (`log-<date>`): card, direction, rating, time, set, plus the typed text, the terms found and missing, the app's suggestion, the question type and how long the answer took. This is the basis for later improvements such as learned synonyms or personal thresholds.
+- **16 badges** for regular practice and milestones, e.g. streaks, total answers, "All done" or the first card in box 5.
 
-Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges Behalten. Es gibt keine Punkte für „richtige“ Bewertungen, weil das dazu verleiten würde, Karten besser zu bewerten, als sie liefen. Der Algorithmus würde dann zu lange Abstände planen.
+Only what matters is rewarded: regular practice and long-term retention. There are no points for "correct" ratings, because that would tempt you to rate cards better than they went. The algorithm would then plan intervals that are too long.
 
-## Handy und Computer gleichzeitig
+## Phone and computer at the same time
 
-Mehrere Geräte oder Tabs können mit demselben Server lernen, ohne sich gegenseitig zu überschreiben:
+Several devices or tabs can study with the same server without overwriting each other:
 
-- **Nachladen:** Ein offener Tab holt sich neue Stände, sobald du zu ihm zurückkehrst, alle 30 Sekunden und vor jeder Lernrunde. Dann erscheint kurz „Neuer Stand von einem anderen Gerät übernommen“.
-- **Zusammenführen:** Speichern zwei Geräte fast gleichzeitig, lehnt der Server den veralteten Stand ab, und die App führt beide zusammen. Pro Karte gilt die jüngste Bewertung, Antworten von beiden Geräten bleiben im Verlauf, und die Tageszähler zählen beide Geräte. Bei Textänderungen gilt die jüngste Fassung.
-- **Gleiche Karte auf zwei Geräten:** Es zählt die später abgegebene Bewertung.
+- **Refreshing:** an open tab picks up new changes when you come back to it, every 30 seconds and before every round. A short note "Picked up changes from another device" appears.
+- **Merging:** if two devices save almost at the same time, the server rejects the outdated version and the app merges both. Per card the latest rating wins, answers from both devices stay in the history, and the daily counters count both devices. For text changes the latest version wins.
+- **Same card on two devices:** the rating given later counts.
 
-Technisch bekommt jedes gespeicherte Dokument eine Versionsnummer (`/api/changes`, Kopfzeile `X-If-Rev`).
+Technically every stored document gets a version number (`/api/changes`, header `X-If-Rev`).
 
-## Wo die Daten liegen
+## Settings: appearance and language
 
-Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.db` (SQLite).
+The gear ⚙︎ at the top next to the date opens the app settings:
 
-## Sichern und wiederherstellen
+- **Appearance:** same as system, light or dark.
+- **Language:** English or German (Deutsch). If you haven't picked one, the app follows your browser's language.
 
-- **Automatisch:** Beim Start und danach stündlich prüft der Server, ob es für heute schon eine Sicherung gibt. Wenn nicht, legt er `data/backups/karteikasten-<Datum>.json` an. Die letzten 14 Tage bleiben erhalten.
-- **Herunterladen:** Auf der Übersicht unter „Daten sichern“ lädt „Sicherung herunterladen“ eine Datei mit allen Stapeln, dem Lernstand, den Themen und dem Verlauf. Weil die automatischen Kopien auf demselben Computer liegen, solltest du ab und zu eine Sicherung herunterladen und woanders ablegen. Die App zeigt an, wann du das zuletzt getan hast, und hebt es nach 30 Tagen hervor.
-- **Wiederherstellen:** „Aus Sicherung wiederherstellen“ nimmt eine heruntergeladene oder automatische Sicherung. Vorher zeigt die App, was darin steckt, und fragt nach. Der jetzige Stand wird zuerst als `data/backups/vor-wiederherstellung-<Zeit>.json` abgelegt. Ein Fehlgriff lässt sich also rückgängig machen, indem du diese Datei wiederherstellst. Die letzten 5 dieser Dateien bleiben erhalten.
-- **CSV-Export:** In den Einstellungen eines Stapels speichert „Als CSV exportieren“ die Karten als Vorderseite;Rückseite. Die Datei lässt sich wieder importieren oder in Excel öffnen. Der Lernstand steckt darin nicht, dafür ist die Sicherung da.
+Both apply to the device you set them on. The cards themselves are not translated, only the app's own text.
 
-## Optionen
+## Where your data lives
 
-| Variable | Standard | Wirkung |
+All decks, your progress and the answer history are stored in `data/karteikasten.db` (SQLite).
+
+## Backup and restore
+
+- **Automatic:** on start and every hour after that, the server checks whether there is already a backup for today. If not, it creates `data/backups/karteikasten-<date>.json`. The last 14 days are kept.
+- **Download:** on the overview under "Back up your data", "Download backup" downloads a file with all decks, your progress, the subjects and the history. Because the automatic copies are on the same computer, you should download a backup now and then and keep it somewhere else. The app shows when you last did this and highlights it after 30 days.
+- **Restore:** "Restore from backup" takes a downloaded or automatic backup. The app first shows what's in it and asks you to confirm. The current state is saved first as `data/backups/vor-wiederherstellung-<time>.json`, so a mistake can be undone by restoring that file. The last 5 of these files are kept.
+- **CSV export:** in a deck's settings, "Export as CSV" saves the cards as front;back. The file can be imported again or opened in Excel. It does not contain your progress; that's what the backup is for.
+
+## Options
+
+| Variable | Default | Effect |
 |---|---|---|
-| `PORT` | `4321` | Anderer Port, falls 4321 belegt ist: `PORT=4322 npm start` |
-| `HOST` | `127.0.0.1` | `HOST=0.0.0.0 npm start` macht die App im WLAN erreichbar, z. B. vom Handy. Es gibt kein Passwort, also nur in einem vertrauenswürdigen Netz nutzen. |
-| `DATA_DIR` | `./data` | Anderer Speicherort für die Datenbank. Nicht in iCloud-Ordner legen. |
-| `BACKUP_DIR` | `./data/backups` | Anderer Ordner für die automatischen Sicherungen, z. B. auf einem externen Laufwerk. Die Sicherungen sind einzelne Dateien und dürfen auch in einem Cloud-Ordner liegen. |
+| `PORT` | `4321` | Another port, if 4321 is taken: `PORT=4322 npm start` |
+| `HOST` | `127.0.0.1` | `HOST=0.0.0.0 npm start` makes the app reachable on your Wi-Fi, e.g. from your phone. There is no password, so only use this on a network you trust. |
+| `DATA_DIR` | `./data` | Another location for the database. Don't put it in an iCloud folder. |
+| `BACKUP_DIR` | `./data/backups` | Another folder for the automatic backups, e.g. on an external drive. Backups are single files and may also live in a cloud folder. |
 
-## Aufbau
+## How it's built
 
-- `server.js`: liefert die App aus, speichert JSON-Dokumente in SQLite (`/api/docs`) und erstellt Sicherungen (`/api/backup`, `/api/restore`). Ohne Framework, nur Node-Bordmittel.
-- `public/index.html`: die komplette App (Import, Lernen, Statistik, Einstellungen).
-- `node_modules/ts-fsrs`: der Lernalgorithmus, wird vom Server unter `/vendor/ts-fsrs.js` ausgeliefert. Fehlt er, nutzt die App eine eingebaute FSRS-5-Version.
-- `artifact/karteikasten.html`: die frühere Version als Claude-Artefakt. Sie speichert im Claude-Konto statt lokal und wird vom Server nicht genutzt.
+- `server.js`: serves the app, stores JSON documents in SQLite (`/api/docs`) and creates backups (`/api/backup`, `/api/restore`). No framework, just Node built-ins.
+- `public/index.html`: the whole app (import, studying, statistics, settings). German is the source language; the English texts are in `EN` at the end of the script. Always write new texts with `T("…")` or `Tn(…)` and add them to `EN`.
+- `node_modules/ts-fsrs`: the learning algorithm, served by the server at `/vendor/ts-fsrs.js`. If it is missing, the app uses a built-in FSRS-5 version.
+- `artifact/karteikasten.html`: the earlier version as a Claude artifact. It saves to the Claude account instead of locally and is not used by the server.
 
 ## Tests
 
@@ -141,14 +154,14 @@ Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.d
 npm test
 ```
 
-Die Tests laden den echten App-Code aus `public/index.html` und prüfen die heiklen Teile: Antwortprüfung (Tippfehler, Schlüsselbegriffe, Schwellen), Zeitplanung (mit ts-fsrs und mit der eingebauten Ersatzversion), die Auswahl der Karten für heute, Problemkarten, Aussetzen und CSV-Export. Dazu kommt der Server in einem Wegwerf-Ordner: Speichern, automatische Sicherung, Wiederherstellen und der Schutz vor fremden Websites. Deine echten Daten werden dabei nicht angefasst. Vor jedem Merge `npm test` laufen lassen.
+The tests load the real app code from `public/index.html` and check the tricky parts: answer checking (typos, key terms, thresholds), scheduling (with ts-fsrs and with the built-in fallback), picking today's cards, problem cards, suspending and CSV export. On top of that they run the server in a throwaway folder: saving, automatic backup, restore and the protection against other websites. They also check that every text has an English version. Your real data is not touched. Run `npm test` before every merge.
 
-## Lizenz
+## License
 
-[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/), siehe [LICENSE](LICENSE).
+[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/), see [LICENSE](LICENSE).
 
-Erlaubt ist jede nicht kommerzielle Nutzung: privat, zum Lernen, für Forschung, Hobby und Lehre sowie durch gemeinnützige Organisationen, Bildungseinrichtungen und Behörden. Du darfst den Code ändern und weitergeben, solange die Lizenz und der Urheberrechtsvermerk mitgegeben werden. Kommerzielle Nutzung ist nicht erlaubt. Wer das möchte, kann nach einer eigenen Lizenz fragen.
+Any noncommercial use is allowed: personal use, studying, research, hobby projects and teaching, as well as use by charitable organisations, educational institutions and public authorities. You may change and share the code as long as you include the license and the copyright notice. Commercial use is not allowed. If you'd like that, you can ask for a separate license.
 
-Versionen bis einschließlich Commit `e2c994d` (8. November 2026) wurden unter der MIT-Lizenz veröffentlicht und bleiben für alle, die sie damals bekommen haben, unter MIT nutzbar.
+Versions up to and including commit `e2c994d` (8 November 2026) were published under the MIT license and remain usable under MIT for everyone who received them back then.
 
-Die mitgenutzte Bibliothek [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) steht unter ihrer eigenen MIT-Lizenz.
+The bundled library [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) is under its own MIT license.

@@ -84,6 +84,7 @@ Fertig, wenn:
 - [ ] **Erster Start erklärt sich selbst:** Beispielstapel, kurze Einführung, Hinweis auf Sicherungen
 - [ ] **Karten bekommen ohne Technikwissen:** Prompt-Vorlage in der App, Import aus Anki und Quizlet
 - [ ] **Stapel teilen** samt Themenbaum, damit eine Lerngruppe sich die Arbeit aufteilt
+- [x] **Oberfläche auf Deutsch und Englisch**, hell/dunkel wählbar, README auf GitHub englisch (10.11.2026)
 - [ ] **Handy:** Anleitung, wie man das Handy im eigenen WLAN verbindet, mit Warnung für öffentliche Netze (Uni-WLAN)
 - [ ] **Updates:** Neue Versionen lassen sich installieren, ohne dass Lernstand verloren geht
 - [ ] **Feedback-Weg:** z. B. ein Formular oder GitHub-Issues mit Vorlage
