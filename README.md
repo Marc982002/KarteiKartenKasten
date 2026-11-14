@@ -102,6 +102,23 @@ For every answer the app stores in its history (`log-<date>`): card, direction, 
 
 Only what matters is rewarded: regular practice and long-term retention. There are no points for "correct" ratings, because that would tempt you to rate cards better than they went. The algorithm would then plan intervals that are too long.
 
+## Connect a phone
+
+You can study on your phone with the same cards. Phone and computer need to be on the same Wi-Fi, and the app needs to be running on the computer.
+
+1. On the computer, open the gear ⚙︎ and click **"Turn on phone access"** under **"Connect a phone"**. If your Mac asks whether "node" may accept incoming connections, click "Allow".
+2. Scan the **QR code** with your phone's camera. The phone is then signed in.
+3. Without a camera: open the address shown (e.g. `http://192.168.178.20:4321/`) in your phone's browser and enter the **6-digit PIN**.
+
+Good to know:
+
+- **Signing in once is enough.** The phone remembers it for a year. Up to 20 devices can be signed in at the same time.
+- **"New PIN …"** signs out all phones. That's the way to go when a device should no longer have access.
+- **Protection against guessing:** after 5 wrong PINs from one device there is a pause of up to 10 minutes.
+- **Computer only:** turning access on and off and seeing the PIN only works on the computer itself, not from the phone.
+- **Only on your own Wi-Fi.** The connection is not encrypted. On public networks such as university Wi-Fi others can listen in, so turn access off there.
+- **Turning it off:** "Turn off phone access" makes the app reachable only from this computer again. The setting is kept after a restart.
+
 ## Phone and computer at the same time
 
 Several devices or tabs can study with the same server without overwriting each other:
@@ -112,14 +129,23 @@ Several devices or tabs can study with the same server without overwriting each 
 
 Technically every stored document gets a version number (`/api/changes`, header `X-If-Rev`).
 
-## Settings: appearance and language
+## Settings
 
-The gear ⚙︎ at the top next to the date opens the app settings:
+The gear ⚙︎ at the top next to the date opens the app settings.
+
+**On this device** (only applies to the device you set it on):
 
 - **Appearance:** same as system, light or dark.
-- **Language:** English or German (Deutsch). If you haven't picked one, the app follows your browser's language.
+- **Text size:** normal, large or extra large.
+- **Font:** handwriting or plain. The plain font is easier to read, e.g. with dyslexia or long answers.
+- **Language:** English or German (Deutsch). If you haven't picked one, the app follows your browser's language. The cards themselves are not translated, only the interface.
 
-Both apply to the device you set them on. The cards themselves are not translated, only the app's own text.
+**For all devices** (stored with your progress, so phone and computer agree):
+
+- **A new study day starts at:** midnight to 6 am, default 4 am. Studying at half past midnight still counts as the day before, for the streak, the daily limits and what is due today.
+- **Quiet mode:** no badges, streak or offers of extra new cards. Badges are still recorded in the background and come back when you turn the mode off.
+- **New decks start with:** new cards per day, direction, question type and target (how reliably you want to know cards, 75 to 97 %). "Apply …" also sets these values on existing decks, all of them or those of one subject. The direction stays as it is, because each direction has its own progress.
+- **Connect a phone** and **Backup and restore**, see those sections.
 
 ## Where your data lives
 
@@ -137,7 +163,7 @@ All decks, your progress and the answer history are stored in `data/karteikasten
 | Variable | Default | Effect |
 |---|---|---|
 | `PORT` | `4321` | Another port, if 4321 is taken: `PORT=4322 npm start` |
-| `HOST` | `127.0.0.1` | `HOST=0.0.0.0 npm start` makes the app reachable on your Wi-Fi, e.g. from your phone. There is no password, so only use this on a network you trust. |
+| `HOST` | `127.0.0.1` | Decides at start where the app can be reached and overrides the "Connect a phone" switch. `HOST=0.0.0.0 npm start` makes it reachable on your Wi-Fi; other devices then need the PIN. The switch in the settings is simpler. |
 | `DATA_DIR` | `./data` | Another location for the database. Don't put it in an iCloud folder. |
 | `BACKUP_DIR` | `./data/backups` | Another folder for the automatic backups, e.g. on an external drive. Backups are single files and may also live in a cloud folder. |
 

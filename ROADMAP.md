@@ -1,10 +1,10 @@
 # Roadmap Karteikasten
 
-Stand: 10.11.2026 · Zielgruppe: du und deine Kommilitonen
+Stand: 14.11.2026 · Zielgruppe: du und deine Kommilitonen
 
 ## Wo die App heute steht
 
-Gebaut in drei Tagen (8.–10.11.2026), 17 Funktionen gemergt, 70 automatische Tests grün.
+Gebaut ab dem 8.11.2026, bis zum 14.11. 26 Branches gemergt, 105 automatische Tests grün. Seit dem 14.11. laufen die Tests nach jedem Push automatisch auf GitHub, auf Linux, Mac und Windows.
 
 Sie kann schon sehr viel: Karten aus CSV, FSRS-Planung, Antwortprüfung auch für lange Antworten, Themen mit Themenbaum, Fortschritt und Abzeichen, Handy und Computer gleichzeitig, Sicherungen.
 
@@ -95,12 +95,12 @@ Fertig, wenn:
 - [ ] **Karten bekommen ohne Technikwissen:** Prompt-Vorlage in der App, Import aus Anki und Quizlet
 - [ ] **Stapel teilen** samt Themenbaum, damit eine Lerngruppe sich die Arbeit aufteilt
 - [x] **Oberfläche auf Deutsch und Englisch**, hell/dunkel wählbar, README auf GitHub englisch (10.11.2026)
-- [ ] **Handy:** Anleitung, wie man das Handy im eigenen WLAN verbindet, mit Warnung für öffentliche Netze (Uni-WLAN)
+- [x] **Handy:** Anleitung, wie man das Handy im eigenen WLAN verbindet, mit Warnung für öffentliche Netze (Uni-WLAN). Verbinden per QR-Code und PIN im Rädchen, Anleitung im README (14.11.2026)
 - [ ] **Updates:** Neue Versionen lassen sich installieren, ohne dass Lernstand verloren geht
 - [ ] **Feedback-Weg:** z. B. ein Formular oder GitHub-Issues mit Vorlage
 - [ ] 3 Testpersonen haben je mindestens 2 Wochen damit gelernt und würden es weiterempfehlen
 
-Technische Voraussetzung im Hintergrund: Den Code in mehrere Dateien aufteilen (heute steckt alles in einer 217-KB-Datei). Sonst werden Fehlerbehebungen für mehrere Nutzer mühsam.
+Technische Voraussetzung im Hintergrund: Den Code in mehrere Dateien aufteilen (heute steckt alles in einer 283-KB-Datei, am 10.11. waren es noch 217 KB). Sonst werden Fehlerbehebungen für mehrere Nutzer mühsam.
 
 **Entscheidung: Programm oder Webseite?**
 
@@ -130,9 +130,9 @@ Nach Nutzen sortiert. „Voraussetzung“ heißt: Vorher nicht anfangen.
 
 | Idee | Nutzen | Voraussetzung | Stufe |
 |---|---|---|---|
-| **Prompt-Vorlage:** Folien rein, fertige CSV mit markierten Fachbegriffen raus | Karten erstellen geht schneller, Antwortprüfung wird genauer | keine | 1.0 |
-| **Klausurdatum:** Pro Thema ein Datum setzen, die App plant so, dass bis dahin alles einmal sitzt, und sagt „15 Min. pro Tag reichen“ | Passt genau zum USP, beantwortet die Frage „schaffe ich das?“ | Mehrere Wochen eigener Verlauf, damit die Zeitschätzung stimmt | 1.0 |
-| **Antwortprüfung lernt Synonyme** aus deinen Korrekturen | Weniger falsche „Nochmal“-Vorschläge | Einige hundert getippte Antworten im Verlauf | 1.0 |
+| ~~**Prompt-Vorlage:**~~ Folien rein, fertige CSV mit markierten Fachbegriffen raus | Karten erstellen geht schneller, Antwortprüfung wird genauer | erledigt (14.11.2026): [docs/prompt-vorlage.md](docs/prompt-vorlage.md). Bewährt sich beim eigenen Lernen? | 1.0 |
+| **Antwortprüfung lernt Synonyme** aus deinen Korrekturen | Weniger falsche „Nochmal“-Vorschläge. Wichtigste Verbesserung am Kern, weil die Konkurrenz Sinn versteht | Einige hundert getippte Antworten im Verlauf | 1.0 |
+| **Klausurdatum:** Pro Thema ein Datum setzen, die App plant so, dass bis dahin alles einmal sitzt, und sagt „15 Min. pro Tag reichen“ | Beantwortet die Frage „schaffe ich das?“. Wird erwartet, RemNote hat es schon | Mehrere Wochen eigener Verlauf, damit die Zeitschätzung stimmt | 1.0 |
 | **Persönliche Schwellen** statt 60 %/30 % | Vorschläge passen besser zu dir | wie oben | 1.0 |
 | **FSRS auf dich einstellen** (Parameter aus deinem Verlauf berechnen) | Genauere Abstände, weniger Wiederholungen | Einige hundert Bewertungen über mehrere Wochen | 1.0 |
 | **Bilder und Formeln** in Karten | Fächer wie Statistik, BWL-Grafiken | Ein Fach, das es braucht. Bilder machen Datenbank und Sicherung größer | 1.5 |
@@ -167,7 +167,7 @@ Bevor etwas gemergt wird:
 ## Als Nächstes
 
 1. **2–4 Wochen bauen pausieren und lernen.** Der Verlauf ist die Grundlage für fast alle 1.0-Punkte, und bisher gibt es einen Tag davon.
-2. **Prompt-Vorlage** für Karten aus Folien schreiben und im README ablegen.
+2. ~~**Prompt-Vorlage** für Karten aus Folien schreiben und im README ablegen.~~ Erledigt (14.11.2026), siehe [docs/prompt-vorlage.md](docs/prompt-vorlage.md). Jetzt beim nächsten Foliensatz ausprobieren und messen, ob 15 Minuten reichen.
 3. **Notizen beim Lernen:** Was nervt, was fehlt? Daraus wird die nächste Runde dieser Roadmap.
 4. **2–3 Testpersonen finden**, am besten aus derselben Vorlesung. Zeig ihnen die App auf deinem Rechner und frag: Würdest du das nutzen? Was müsste anders sein? Installieren müssen sie noch nichts. Das prüft früh, ob 1.5 sich lohnt.
 
