@@ -100,6 +100,23 @@ Pro Antwort speichert die App im Verlauf (`log-<Datum>`): Karte, Richtung, Bewer
 
 Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges Behalten. Es gibt keine Punkte für „richtige“ Bewertungen, weil das dazu verleiten würde, Karten besser zu bewerten, als sie liefen. Der Algorithmus würde dann zu lange Abstände planen.
 
+## Handy verbinden
+
+Du kannst auf dem Handy mit denselben Karten lernen. Handy und Computer müssen im selben WLAN sein, und die App muss auf dem Computer laufen.
+
+1. Auf dem Computer das Rädchen ⚙︎ öffnen und unter **„Handy verbinden“** auf **„Handy-Zugang einschalten“** klicken. Fragt der Mac, ob „node“ eingehende Verbindungen annehmen darf, auf „Erlauben“ klicken.
+2. Den **QR-Code** mit der Handy-Kamera scannen. Das Handy ist danach angemeldet.
+3. Ohne Kamera: die angezeigte Adresse (z. B. `http://192.168.178.20:4321/`) im Browser des Handys öffnen und die **6-stellige PIN** eingeben.
+
+Gut zu wissen:
+
+- **Einmal anmelden reicht.** Das Handy merkt sich die Anmeldung ein Jahr lang. Bis zu 20 Geräte können gleichzeitig angemeldet sein.
+- **„Neue PIN …“** meldet alle Handys ab. Das ist der Weg, wenn ein Gerät nicht mehr zugreifen soll.
+- **Schutz vor Ausprobieren:** Nach 5 falschen PINs von einem Gerät ist bis zu 10 Minuten Pause.
+- **Nur auf dem Computer:** Den Zugang ein- und ausschalten und die PIN sehen geht nur am Computer selbst, nicht vom Handy aus.
+- **Nur im eigenen WLAN.** Die Verbindung ist nicht verschlüsselt. In öffentlichen Netzen wie dem Uni-WLAN können andere mitlesen, also dort den Zugang ausschalten.
+- **Ausschalten:** „Handy-Zugang ausschalten“ macht die App wieder nur auf diesem Computer erreichbar. Die Einstellung bleibt nach einem Neustart erhalten.
+
 ## Handy und Computer gleichzeitig
 
 Mehrere Geräte oder Tabs können mit demselben Server lernen, ohne sich gegenseitig zu überschreiben:
@@ -110,14 +127,23 @@ Mehrere Geräte oder Tabs können mit demselben Server lernen, ohne sich gegense
 
 Technisch bekommt jedes gespeicherte Dokument eine Versionsnummer (`/api/changes`, Kopfzeile `X-If-Rev`).
 
-## Einstellungen: Darstellung und Sprache
+## Einstellungen
 
-Das Rädchen ⚙︎ oben neben dem Datum öffnet die Einstellungen der App:
+Das Rädchen ⚙︎ oben neben dem Datum öffnet die Einstellungen der App.
+
+**Auf diesem Gerät** (gilt nur für das Gerät, auf dem du es einstellst):
 
 - **Darstellung:** wie das System, hell oder dunkel.
-- **Sprache:** Deutsch oder English. Ohne eigene Wahl richtet sich die App nach der Sprache des Browsers.
+- **Schriftgröße:** normal, groß oder sehr groß.
+- **Schrift:** Handschrift oder schlicht. Die schlichte Schrift ist leichter zu lesen, z. B. bei Legasthenie oder langen Antworten.
+- **Sprache:** Deutsch oder English. Ohne eigene Wahl richtet sich die App nach der Sprache des Browsers. Die Karten selbst werden nicht übersetzt, nur die Oberfläche.
 
-Beides gilt für das Gerät, auf dem du es einstellst. Die Karten selbst werden nicht übersetzt, nur die Oberfläche.
+**Für alle Geräte** (gespeichert im Lernstand, Handy und Computer sind sich also einig):
+
+- **Neuer Lerntag beginnt um:** Mitternacht bis 6 Uhr, Standard 4 Uhr. Wer um halb eins lernt, zählt noch zum Vortag, für die Serie, die Tageslimits und was heute fällig ist.
+- **Ruhiger Modus:** ohne Abzeichen, Serie und das Angebot weiterer neuer Karten. Abzeichen werden im Hintergrund weiter vergeben und sind wieder da, wenn du den Modus ausschaltest.
+- **Neue Stapel starten mit:** neue Karten pro Tag, Abfragerichtung, Abfrageart und Ziel (wie sicher du Karten wissen willst, 75 bis 97 %). „Übertragen …“ setzt diese Werte auch bei bestehenden Stapeln, bei allen oder denen eines Themas. Die Abfragerichtung bleibt dabei, weil jede Richtung ihren eigenen Lernstand hat.
+- **Handy verbinden** und **Sichern und wiederherstellen**, siehe die Abschnitte dazu.
 
 ## Wo die Daten liegen
 
@@ -135,7 +161,7 @@ Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.d
 | Variable | Standard | Wirkung |
 |---|---|---|
 | `PORT` | `4321` | Anderer Port, falls 4321 belegt ist: `PORT=4322 npm start` |
-| `HOST` | `127.0.0.1` | `HOST=0.0.0.0 npm start` macht die App im WLAN erreichbar, z. B. vom Handy. Es gibt kein Passwort, also nur in einem vertrauenswürdigen Netz nutzen. |
+| `HOST` | `127.0.0.1` | Legt beim Start fest, wo die App erreichbar ist, und überstimmt den Schalter „Handy verbinden“. `HOST=0.0.0.0 npm start` macht sie im WLAN erreichbar, andere Geräte brauchen dann die PIN. Einfacher ist der Schalter in den Einstellungen. |
 | `DATA_DIR` | `./data` | Anderer Speicherort für die Datenbank. Nicht in iCloud-Ordner legen. |
 | `BACKUP_DIR` | `./data/backups` | Anderer Ordner für die automatischen Sicherungen, z. B. auf einem externen Laufwerk. Die Sicherungen sind einzelne Dateien und dürfen auch in einem Cloud-Ordner liegen. |
 
