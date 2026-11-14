@@ -64,6 +64,10 @@ The daily limit mainly protects the coming days, because every new card brings r
 
 Background: new cards should first be recalled correctly a few times, after that spaced repetition matters most (Rawson & Dunlosky 2011). The size of a pack matters little as long as the spacing is right (Nakata & Webb 2016). Items with similar meanings interfere with each other when learned together. The thresholds 75%, 70% and "twice" are reasoned starting values and can be tuned from the history.
 
+## Cards from lecture slides
+
+The [prompt template](docs/prompt-template.md) lets an AI chat turn your slides into a ready CSV file with marked key terms, plus an outline for the subject tree. Both can be pasted straight into the app.
+
 ## Editing cards
 
 Under **"Cards"** on each deck you see all cards with their box. You can search, edit, delete, add and suspend them. Editing keeps the progress. If you rewrite a question heavily, you can reset its progress with a checkbox.

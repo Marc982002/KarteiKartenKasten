@@ -62,6 +62,10 @@ Das Tageslimit schützt vor allem die nächsten Tage, denn jede neue Karte bring
 
 Hintergrund: Erst sollen neue Karten einige Male sicher abgerufen werden, dann zählt vor allem das verteilte Wiederholen (Rawson & Dunlosky 2011). Wie groß ein Päckchen ist, macht wenig aus, solange die Abstände stimmen (Nakata & Webb 2016). Bedeutungsähnliches stört sich gegenseitig, wenn es zusammen gelernt wird. Die Schwellen 75 %, 70 % und „doppelt“ sind begründete Startwerte und lassen sich anhand des Verlaufs anpassen.
 
+## Karten aus Vorlesungsfolien erstellen
+
+Die [Prompt-Vorlage](docs/prompt-vorlage.md) macht in einem KI-Chat aus deinen Folien eine fertige CSV-Datei mit markierten Fachbegriffen, dazu eine Gliederung für den Themenbaum. Beides lässt sich direkt in die App einfügen.
+
 ## Karten bearbeiten
 
 Unter **„Karten“** an jedem Stapel siehst du alle Karten mit ihrem Fach. Du kannst sie durchsuchen, bearbeiten, löschen, einzeln hinzufügen und aussetzen. Beim Bearbeiten bleibt der Lernstand erhalten. Wer die Frage stark umschreibt, kann ihn per Häkchen zurücksetzen.
