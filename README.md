@@ -184,7 +184,7 @@ All decks, your progress and the answer history are stored in `data/karteikasten
 npm test
 ```
 
-The tests load the real app code from `public/index.html` and check the tricky parts: answer checking (typos, key terms, thresholds), scheduling (with ts-fsrs and with the built-in fallback), picking today's cards, problem cards, suspending and CSV export. On top of that they run the server in a throwaway folder: saving, automatic backup, restore and the protection against other websites. They also check that every text has an English version. Your real data is not touched. Run `npm test` before every merge.
+The tests load the real app code from `public/index.html` and check the tricky parts: answer checking (typos, key terms, thresholds), scheduling (with ts-fsrs and with the built-in fallback), picking today's cards, problem cards, suspending and CSV export. On top of that they run the server in a throwaway folder: saving, automatic backup, restore and the protection against other websites. They also check that every text has an English version. Your real data is not touched. Run `npm test` before every merge. The tests also run on GitHub after every push, on Linux, Mac and Windows (`.github/workflows/test.yml`). The result is under the repository's "Actions" tab.
 
 ## License
 

@@ -182,7 +182,7 @@ Alle Stapel, der Lernstand und der Antwortverlauf liegen in `data/karteikasten.d
 npm test
 ```
 
-Die Tests laden den echten App-Code aus `public/index.html` und prüfen die heiklen Teile: Antwortprüfung (Tippfehler, Schlüsselbegriffe, Schwellen), Zeitplanung (mit ts-fsrs und mit der eingebauten Ersatzversion), die Auswahl der Karten für heute, Problemkarten, Aussetzen und CSV-Export. Dazu kommt der Server in einem Wegwerf-Ordner: Speichern, automatische Sicherung, Wiederherstellen und der Schutz vor fremden Websites. Außerdem prüfen sie, dass jeder Text eine englische Fassung hat. Deine echten Daten werden dabei nicht angefasst. Vor jedem Merge `npm test` laufen lassen.
+Die Tests laden den echten App-Code aus `public/index.html` und prüfen die heiklen Teile: Antwortprüfung (Tippfehler, Schlüsselbegriffe, Schwellen), Zeitplanung (mit ts-fsrs und mit der eingebauten Ersatzversion), die Auswahl der Karten für heute, Problemkarten, Aussetzen und CSV-Export. Dazu kommt der Server in einem Wegwerf-Ordner: Speichern, automatische Sicherung, Wiederherstellen und der Schutz vor fremden Websites. Außerdem prüfen sie, dass jeder Text eine englische Fassung hat. Deine echten Daten werden dabei nicht angefasst. Vor jedem Merge `npm test` laufen lassen. Zusätzlich laufen die Tests nach jedem Push auf GitHub, auf Linux, Mac und Windows (`.github/workflows/test.yml`). Das Ergebnis steht im Reiter „Actions“ des Repositorys.
 
 ## Lizenz
 
