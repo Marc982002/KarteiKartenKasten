@@ -301,6 +301,10 @@ td.off{color:var(--muted);opacity:.6}
 .chip-label{font-size:12px;color:var(--muted);min-width:64px}
 .chip{font-size:13px;line-height:1.3;padding:2px 9px;border-radius:999px;border:1px solid currentColor;overflow-wrap:anywhere}
 .chip.hit{color:var(--good)} .chip.miss{color:var(--again)}
+button.chip{font:inherit;font-size:13px;background:transparent;color:var(--ink);cursor:pointer}
+button.chip.miss{color:var(--again);border-style:dashed}
+button.chip:hover,button.chip.on{background:color-mix(in srgb,currentColor 12%,transparent)}
+.kw-pick{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:10px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
 mark{color:inherit;border-radius:3px;padding:0 2px}
 mark.kw{background:color-mix(in srgb,var(--accent) 16%,transparent)}
 mark.hit{background:color-mix(in srgb,var(--good) 24%,transparent)}
@@ -1220,7 +1224,7 @@ function suggestBranches(tt, outline) {
   };
   for (const c of rest) {
     const text = plain(c.f) + " \n " + plain(c.b);
-    for (const m of (c.f + " " + c.b).matchAll(MARK)) if (m[1].length <= 40) add(m[1]);
+    for (const m of (c.f + " " + c.b).matchAll(MARK)) if (firstAlt(m[1]).length <= 40) add(firstAlt(m[1]));
     for (const m of text.matchAll(/(\p{Lu}[\p{L}'-]+)\s+(?:&|und|and)\s+(\p{Lu}[\p{L}'-]+)/gu)) add(m[1] + " & " + m[2]);
     for (const m of text.matchAll(/(\p{Lu}[\p{L}'-]+)\s+et\s+al\./gu)) add(m[1]);
     // Names: only where the wording says it is a name ("laut Strassmann", "Teece (2007)").
@@ -1482,7 +1486,13 @@ const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { c
 const normA = t => String(t).toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[.,!?;:"'„“”‚‘’«»¿¡…*]/g, " ").replace(/\s+/g, " ").trim();
 // *Sternchen* or **Fettschrift** (as AI tools write it) mark key terms. plain() removes the marks.
 const MARK = /\*{1,2}([^*\n]+?)\*{1,2}/g;
-const plain = t => String(t).replace(MARK, "$1");
+// Synonyms: "Konkurrenten|Mitbewerber" or **where to play|where do we play**. Everything after | counts
+// as the same term when checking, but is not shown. Outside marks a synonym is one word.
+const ALT = /(?<=[\p{L}\p{N}])\|[\p{L}\p{N}][\p{L}\p{N}-]*/gu;
+const firstAlt = m => m.split("|")[0].trim();
+const plain = t => String(t).replace(MARK, (_, m) => firstAlt(m)).replace(ALT, "");
+// For short answers: synonyms become listed alternatives ("Haus|Gebäude" -> "Haus / Gebäude").
+const withAlts = t => String(t).replace(MARK, "$1").replace(/\|/g, " / ");
 const hasMarks = t => /\*{1,2}[^*\n]+?\*{1,2}/.test(t);
 const stripMarks = t => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss");
 const ARTICLES = /^(der|die|das|den|dem|des|ein|eine|einen|the|a|an|to|el|la|los|las|le|les|l|un|une|il|lo|gli)\s+/;
@@ -1547,14 +1557,21 @@ function keywordsOf(answer) {
     const list = marks.map(m => {
       const after = text.slice(m.index + m[0].length).match(/^\s*\(([^()]{1,80})\)/);
       const alt = after && !PAREN_SKIP.test(after[1]) ? after[1].trim() : null;
-      const alts = [m[1], alt].filter(Boolean).map(p => { const t = termsOf(p); return t.length ? t : wordsOf(p).map(kn); }).filter(a => a.length);
-      return { label: [m[1].trim(), alt].filter(Boolean).join(" / "), alts, need: "all" };
+      const [first, ...syn] = m[1].split("|").map(p => p.trim()).filter(Boolean);
+      const names = [first, alt, ...syn].filter(Boolean);
+      const alts = names.map(p => { const t = termsOf(p); return t.length ? t : wordsOf(p).map(kn); }).filter(a => a.length);
+      // at: where a new synonym goes in the card text (before the closing asterisks).
+      return { label: names.join(" / "), alts, need: "all", at: m.index + m[0].length - m[0].match(/\*+$/)[0].length };
     }).filter(k => k.alts.length);
     return { marked: true, list };
   }
   // Automatic: split into words and bracket groups.
   const toks = [];
-  for (const m of text.matchAll(/\(([^()]*)\)|([\p{L}\p{N}][\p{L}\p{N}-]*)/gu)) toks.push(m[1] !== undefined ? { paren: m[1] } : { w: m[2], n: kn(m[2]) });
+  for (const m of text.matchAll(/\(([^()]*)\)|([\p{L}\p{N}][\p{L}\p{N}-]*)((?:\|[\p{L}\p{N}][\p{L}\p{N}-]*)*)/gu)) {
+    if (m[1] !== undefined) { toks.push({ paren: m[1] }); continue; }
+    const syn = m[3] ? m[3].slice(1).split("|") : [];
+    toks.push({ w: m[2], n: kn(m[2]), syn, end: m.index + m[0].length });
+  }
   const units = [], seen = new Set(), used = new Set();
   // "Begriff (Übersetzung)" becomes one term with two alternatives.
   toks.forEach((t, i) => {
@@ -1570,18 +1587,47 @@ function keywordsOf(answer) {
     const leftWords = left.map(j => toks[j].n), key = leftWords.join(" ");
     if (seen.has(key)) return;
     left.forEach(j => used.add(j)); seen.add(key); leftWords.forEach(n => seen.add(n)); inner.forEach(n => seen.add(n));
-    units.push({ label: left.map(j => toks[j].w).join(" ") + " / " + t.paren.trim(), alts: [leftWords, inner], need: "half", i: left[0], score: 30 });
+    const syn = left.flatMap(j => toks[j].syn);
+    units.push({ label: [left.map(j => toks[j].w).join(" "), t.paren.trim(), ...syn].join(" / "), alts: [leftWords, inner, ...syn.map(w => [kn(w)])],
+      need: "half", i: left[0], score: 30, at: toks[left[left.length - 1]].end });
   });
   // Remaining single words: prefer nouns and technical terms (capitalised), long words, numbers.
   toks.forEach((t, i) => {
     if (t.paren !== undefined || used.has(i) || !isTerm(t.n) || seen.has(t.n)) return;
     seen.add(t.n);
-    units.push({ label: t.w, alts: [[t.n]], need: "all", i, score: Math.min(t.n.length, 12) + (/^\p{Lu}/u.test(t.w) ? 6 : 0) + (/\d/.test(t.n) ? 4 : 0) });
+    units.push({ label: [t.w, ...t.syn].join(" / "), alts: [[t.n], ...t.syn.map(w => [kn(w)])], need: "all", i, at: t.end,
+      score: Math.min(t.n.length, 12) + (/^\p{Lu}/u.test(t.w) ? 6 : 0) + (/\d/.test(t.n) ? 4 : 0) });
   });
   const list = units.length > 7 ? units.slice().sort((a, b) => b.score - a.score).slice(0, 7).sort((a, b) => a.i - b.i) : units;
   return { marked: false, list };
 }
-// One key word counts as found despite endings (chemisch/chemischen), compounds (Sonnenlichtenergie) or a small typo.
+/* Word forms: a rough stem, so that "combining" counts as "combined", "gehandelt" as "Handeln"
+   and "organisatorisch" as "Organisation". Works on lower-case words without accents (see kn). */
+const IRREGULAR = Object.fromEntries(("bought:buy brought:bring thought:think built:build made:make sold:sell taught:teach won:win "
+  + "chose:choose chosen:choose led:lead ran:run began:begin begun:begin grew:grow grown:grow gave:give given:give took:take taken:take "
+  + "went:go gone:go kept:keep held:hold found:find meant:mean paid:pay spent:spend sought:seek drove:drive driven:drive rose:rise "
+  + "risen:rise fell:fall fallen:fall became:become knew:know known:know saw:see seen:see wrote:write written:write got:get gotten:get "
+  + "lost:lose felt:feel left:leave met:meet sent:send told:tell understood:understand fought:fight forgot:forget forgotten:forget "
+  + "shown:show better:good best:good worse:bad worst:bad").split(" ").map(p => p.split(":")));
+// Derivations (-isch, -ion, -or …) and inflections (-en, -ed, -ing …), longer ones first; stripped at most twice, and a stem keeps 5 letters.
+const SUFFIXES = ["ungen", "ieren", "iert", "isch", "lich", "keit", "heit", "itat", "ung", "ion", "ing", "ies", "ers", "ern", "end",
+  "est", "or", "en", "er", "em", "es", "ed", "et", "st", "ly", "e", "s", "n", "t"];
+// Returns the word after one and after two strips (both count, so "organisation" and "organisatorisch" meet at "organisat").
+function stems(w) {
+  w = IRREGULAR[w] || w;
+  const out = [];
+  for (let pass = 0; pass < 2; pass++) {
+    const suf = SUFFIXES.find(s => w.endsWith(s) && w.length - s.length >= 5);
+    if (!suf) break;
+    w = w.slice(0, -suf.length); out.push(w);
+  }
+  return out.length ? out : [w];
+}
+// German participles: "gehandelt" -> "handelt". Kept as extra stems, because many words just start with "ge" (Geschäft, generieren).
+const stemsOf = w => w.length >= 7 && w.startsWith("ge") ? [...stems(w), ...stems(w.slice(2))] : stems(w);
+const sameStem = (a, b) => { const sb = stemsOf(b); return stemsOf(a).some(x => sb.includes(x)); };
+// One key word counts as found despite endings (chemisch/chemischen), other word forms (combining/combined),
+// compounds (Sonnenlichtenergie, "Vorteil im Wettbewerb" for Wettbewerbsvorteil) or a small typo.
 function wordHit(kw, tokens) {
   const num = /\d/.test(kw);
   for (const t of tokens) {
@@ -1591,6 +1637,17 @@ function wordHit(kw, tokens) {
     if (kw.length >= 5 && t.length > kw.length && t.includes(kw)) return true;
     const tol = kw.length >= 9 ? 2 : kw.length >= 5 ? 1 : 0;
     if (tol && lev(t, kw) <= tol) return true;
+    if (t.length >= 3 && kw.length >= 3 && sameStem(t, kw)) return true;
+  }
+  return !num && compoundHit(kw, tokens);
+}
+// A compound key word whose two parts both appear as separate words, in any order ("Fugen-s" allowed).
+function compoundHit(kw, tokens) {
+  if (kw.length < 10 || kw.includes("-")) return false;
+  const has = part => tokens.some(t => t === part || (part.length >= 4 && t.length >= 4 && sameStem(t, part)));
+  for (let i = 4; i <= kw.length - 4; i++) {
+    const a = kw.slice(0, i), b = kw.slice(i);
+    if ((has(a) || (a.endsWith("s") && a.length >= 5 && has(a.slice(0, -1)))) && has(b)) return true;
   }
   return false;
 }
@@ -1623,7 +1680,7 @@ function highlightAnswer(text, res) {
     return hit.has(n) ? `<mark class="hit">${esc(part)}</mark>` : miss.has(n) ? `<mark class="miss">${esc(part)}</mark>` : esc(part);
   }).join("");
 }
-const richText = t => esc(t).replace(/\*{1,2}([^*\n]+?)\*{1,2}/g, '<mark class="kw">$1</mark>');
+const richText = t => esc(t).replace(MARK, (_, m) => `<mark class="kw">${firstAlt(m)}</mark>`).replace(ALT, "");
 
 // Wrong options that look like real answers: other cards' answers of similar length.
 function distractors(deck, u) {
@@ -1654,7 +1711,7 @@ function submitTyped(value) {
   const ans = answerOf(s.current), given = value.trim();
   if (s.mode === "self") s.answer = { kind: "self", method: "self", given, verdict: given ? "self" : "empty", suggest: given ? 0 : 1 };
   else {
-    const res = (usesKeywords(ans) && checkKeywords(value, ans)) || { method: "exact", ...checkAnswer(value, plain(ans)) };
+    const res = (usesKeywords(ans) && checkKeywords(value, ans)) || { method: "exact", ...checkAnswer(value, withAlts(ans)) };
     s.answer = { kind: "type", given, ...res };
   }
   markAnswered(s); s.revealed = true; render();
@@ -1664,6 +1721,30 @@ function chooseOption(i) {
   const right = normA(s.options[i]) === normA(answerOf(s.current));
   s.answer = { kind: "mc", pick: i, verdict: right ? "right" : "wrong", suggest: right ? 3 : 1 };
   markAnswered(s); s.revealed = true; render();
+}
+/* "Zählt doch": a missing key term was meant, just in other words. The chosen word from the answer is saved
+   on the card as a synonym ("Konkurrenten|Mitbewerber"), counts from now on and can be removed in the card editor. */
+// Words of the answer to choose from: content words that don't already count for a found term.
+function synonymCandidates(a, k) {
+  const counted = [...a.found, k].flatMap(f => f.alts.flat()), seen = new Set(), out = [];
+  for (const w of wordsOf(a.given)) {
+    const n = kn(w);
+    if (!isTerm(n) || seen.has(n) || counted.some(c => wordHit(c, [n]))) continue;
+    seen.add(n); out.push(w);
+  }
+  return out.slice(0, 30);
+}
+function acceptSynonym(word) {
+  const s = state.session, u = s?.current, a = s?.answer;
+  const k = a?.method === "keywords" ? a.missing[s.kwPick] : null;
+  const w = String(word || "").replace(/[^\p{L}\p{N}-]/gu, "");
+  if (!u || !k || k.at == null || !w) return;
+  const field = u.dir === "f" ? "b" : "f", text = u.card[field];
+  u.card[field] = text.slice(0, k.at) + "|" + w + text.slice(k.at);
+  u.card.m = Date.now(); cardsRev++; markChunk(u.deck, u.card.c);
+  s.answer = { ...a, ...checkKeywords(a.given, u.card[field]) }; s.kwPick = null;
+  toast(T("„{w}“ zählt jetzt auch für „{k}“.", { w, k: firstAlt(k.label.replace(/ \/ /g, "|")) }));
+  render();
 }
 function dontKnow() {
   const s = state.session; if (!s?.current || s.revealed) return;
@@ -1828,7 +1909,7 @@ function nextUnit(s) {
 }
 function advance() {
   const s = state.session;
-  s.current = nextUnit(s); s.revealed = false; s.answer = null; s.editing = false; s.preview = null; s.shownAt = Date.now(); s.answerMs = null;
+  s.current = nextUnit(s); s.revealed = false; s.answer = null; s.kwPick = null; s.editing = false; s.preview = null; s.shownAt = Date.now(); s.answerMs = null;
   if (!s.current) {
     s.finished = true;
     if (allCleared()) state.flags.cleared = true;
@@ -2710,7 +2791,7 @@ function listCards(deck) {
 function cardFormHTML(prefix, f, b, extra, save, saveAttrs) {
   return `
     <label class="field">${T("Vorderseite")}<textarea class="ce-input" id="${prefix}-f" rows="2">${esc(f)}</textarea></label>
-    <label class="field">${T("Rückseite")}<textarea class="ce-input" id="${prefix}-b" rows="3">${esc(b)}</textarea><span class="hint">${T("Mit *Sternchen* markierst du Schlüsselbegriffe.")}</span></label>
+    <label class="field">${T("Rückseite")}<textarea class="ce-input" id="${prefix}-b" rows="3">${esc(b)}</textarea><span class="hint">${T("Mit *Sternchen* markierst du Schlüsselbegriffe, mit | ein Synonym: *Konkurrenten|Mitbewerber*.")}</span></label>
     ${extra}
     <div class="row-actions">
       <button class="btn primary sm" data-act="${save}" ${saveAttrs}>${T("Speichern")}</button>
@@ -3105,10 +3186,23 @@ function studyHTML() {
       const V = { right: [T("Richtig"), "--good"], close: [T("Teilweise richtig"), "--hard"], wrong: [T("Zu wenig getroffen"), "--again"], empty: [T("Nicht beantwortet"), "--muted"] }[a.verdict];
       const n = a.found.length + a.missing.length;
       const chips = (list, cls) => list.map(k => `<span class="chip ${cls}">${esc(k.label)}</span>`).join("");
+      // Missing terms can be tapped to say "I meant that" (only when there is an answer to pick a word from).
+      const pickable = a.given && !s.editing;
+      const missChips = a.missing.map((k, i) => pickable && k.at != null
+        ? `<button class="chip miss pick ${s.kwPick === i ? "on" : ""}" data-act="kw-pick" data-k="${i}" aria-expanded="${s.kwPick === i}" title="${T("Gemeint, aber anders ausgedrückt? Antippen")}">${esc(k.label)}</button>`
+        : `<span class="chip miss">${esc(k.label)}</span>`).join("");
+      const pk = s.kwPick != null && a.missing[s.kwPick], cands = pk ? synonymCandidates(a, pk) : [];
+      const pickBox = pk ? `<div class="kw-pick" role="group" aria-label="${T("Synonym wählen")}">
+          <span>${T("Welches deiner Wörter meint „{k}“?", { k: esc(firstAlt(pk.label.replace(/ \/ /g, "|"))) })}</span>
+          ${cands.length ? `<div class="chips">${cands.map(w => `<button class="chip" data-act="kw-accept" data-w="${esc(w)}">${esc(w)}</button>`).join("")}</div>` : `<span class="muted small">${T("In deiner Antwort steht kein passendes Wort.")}</span>`}
+          <span class="muted small">${T("Das Wort wird als Synonym auf der Karte gespeichert und zählt ab jetzt mit. Entfernen kannst du es unter „Karte bearbeiten“.")} <button class="linkish" data-act="kw-cancel">${T("Abbrechen")}</button></span>
+        </div>` : "";
       feedback = `<div class="verdict" style="--c:var(${V[1]})">
         <b>${V[0]} · ${a.marked ? T("{a} von {b} markierten Schlüsselbegriffen", { a: a.found.length, b: n }) : T("{a} von {b} Schlüsselbegriffen", { a: a.found.length, b: n })}</b>
         ${a.found.length ? `<div class="chips"><span class="chip-label">${T("Getroffen")}</span>${chips(a.found, "hit")}</div>` : ""}
-        ${a.missing.length ? `<div class="chips"><span class="chip-label">${T("Fehlt")}</span>${chips(a.missing, "miss")}</div>` : ""}
+        ${a.missing.length ? `<div class="chips"><span class="chip-label">${T("Fehlt")}</span>${missChips}</div>` : ""}
+        ${a.missing.length && pickable && !pk ? `<span class="muted small">${T("Einen Begriff gemeint, aber anders ausgedrückt? Tippe ihn an.")}</span>` : ""}
+        ${pickBox}
         ${yours}
         <span class="muted small">${T("Geprüft wird, ob die Begriffe vorkommen, nicht der Sinn. Passt der Vorschlag nicht, bewerte selbst.")}</span>
       </div>`;
@@ -3350,6 +3444,9 @@ document.addEventListener("click", e => {
   else if (act === "reveal") reveal();
   else if (act === "choose") chooseOption(+b.dataset.i);
   else if (act === "dont-know") dontKnow();
+  else if (act === "kw-pick") { const s = state.session; if (s) { s.kwPick = s.kwPick === +b.dataset.k ? null : +b.dataset.k; render(); $(".kw-pick .chip")?.focus(); } }
+  else if (act === "kw-cancel") { const s = state.session; if (s) { s.kwPick = null; render(); } }
+  else if (act === "kw-accept") acceptSynonym(b.dataset.w);
   else if (act === "rate") rate(+b.dataset.g);
   else if (act === "undo") undo();
   else if (act === "exit") exitStudy();
@@ -3745,7 +3842,7 @@ var EN = {
   "Endgültig löschen": "Delete permanently", "Stapel löschen": "Delete deck", "Stapel gelöscht.": "Deck deleted.",
 
   // Card list
-  "Vorderseite": "Front", "Rückseite": "Back", "Mit *Sternchen* markierst du Schlüsselbegriffe.": "Mark key terms with *asterisks*.",
+  "Vorderseite": "Front", "Rückseite": "Back", "Mit *Sternchen* markierst du Schlüsselbegriffe, mit | ein Synonym: *Konkurrenten|Mitbewerber*.": "Mark key terms with *asterisks*, add a synonym with |: *competitors|rivals*.",
   "Keine Karte gefunden.": "No card found.",
   "Keine Problemkarten. Als Problemkarte gilt eine Karte, die du {n}-mal oder öfter vergessen hast.": "No problem cards. A problem card is one you have forgotten {n} times or more.",
   "Keine Karte ausgesetzt.": "No suspended cards.", "Keine Karten.": "No cards.",
@@ -3800,6 +3897,13 @@ var EN = {
   "Nicht beantwortet": "Not answered",
   "{a} von {b} markierten Schlüsselbegriffen": "{a} of {b} marked key terms", "{a} von {b} Schlüsselbegriffen": "{a} of {b} key terms",
   "Getroffen": "Found", "Fehlt": "Missing",
+  "Gemeint, aber anders ausgedrückt? Antippen": "Meant it, but in other words? Tap",
+  "Einen Begriff gemeint, aber anders ausgedrückt? Tippe ihn an.": "Meant a term, but used other words? Tap it.",
+  "Synonym wählen": "Choose a synonym",
+  "Welches deiner Wörter meint „{k}“?": "Which of your words means “{k}”?",
+  "In deiner Antwort steht kein passendes Wort.": "Your answer has no word to pick.",
+  "Das Wort wird als Synonym auf der Karte gespeichert und zählt ab jetzt mit. Entfernen kannst du es unter „Karte bearbeiten“.": "The word is saved on the card as a synonym and counts from now on. You can remove it under “Edit card”.",
+  "„{w}“ zählt jetzt auch für „{k}“.": "“{w}” now also counts for “{k}”.",
   "Geprüft wird, ob die Begriffe vorkommen, nicht der Sinn. Passt der Vorschlag nicht, bewerte selbst.": "The check looks for the terms, not the meaning. If the suggestion doesn't fit, rate it yourself.",
   "Vergleiche selbst": "Compare yourself",
   "Die richtige Antwort steht auf der Karte. Bewerte, wie gut deine Antwort passt.": "The correct answer is on the card. Rate how well your answer matches.",

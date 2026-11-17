@@ -90,3 +90,71 @@ test("Wortendungen und kleine Tippfehler in langen Antworten werden toleriert", 
   assert.equal(run(`wordHit("strategie", ["stratgie"])`), true);
   assert.equal(run(`wordHit("rom", ["rim"])`), false);
 });
+
+test("andere Wortformen zählen: Verbformen, Partizip mit ge-, Ableitungen, unregelmäßige Verben", () => {
+  const hit = (kw, w) => run(`wordHit(${JSON.stringify(kw)}, [${JSON.stringify(w)}])`);
+  assert.equal(hit("combined", "combining"), true);
+  assert.equal(hit("handeln", "gehandelt"), true);
+  assert.equal(hit("organisation", "organisatorisch"), true);
+  assert.equal(hit("buy", "bought"), true);
+  assert.equal(hit("skalieren", "skaliert"), true);
+  // Different words stay different.
+  assert.equal(hit("position", "positiv"), false);
+  assert.equal(hit("strategie", "strategisch"), false);
+  assert.equal(hit("buy", "bug"), false);
+});
+
+test("zusammengesetzte Begriffe zählen auch, wenn beide Teile getrennt vorkommen", () => {
+  const r = keywords("Es gibt keinen Vorteil im Wettbewerb", "IT bietet keinen nachhaltigen *Wettbewerbsvorteil*");
+  assert.deepEqual(labels(r.found), ["Wettbewerbsvorteil"]);
+  assert.equal(keywords("ein Wettbewerbsnachteil", "*Wettbewerbsvorteil*").found.length, 0);
+});
+
+test("Synonyme mit |: zählen beim Prüfen, werden aber nicht angezeigt", () => {
+  assert.equal(run(`plain("besser als **Konkurrenten|Mitbewerber** und Kunden|Abnehmer")`), "besser als Konkurrenten und Kunden");
+  assert.equal(run(`richText("**where to play|where do we play**")`), '<mark class="kw">where to play</mark>');
+  // marked term
+  const m = keywords("Die Mitbewerber machen es schlechter", "Tätigkeiten besser als *Konkurrenten|Mitbewerber* ausführen");
+  assert.deepEqual(labels(m.found), ["Konkurrenten / Mitbewerber"]);
+  // phrase as synonym inside a marked term
+  assert.equal(keywords("the markets we compete in", "**where to play|where to compete** and **how to win**").found.length, 1);
+  // automatic terms
+  const long = "Operative Effizienz bedeutet, ähnliche Tätigkeiten besser als Konkurrenten|Mitbewerber auszuführen, Best Practices führen zu Konvergenz.";
+  const a = keywords("Tätigkeiten besser als die Mitbewerber", long);
+  assert.ok(labels(a.found).includes("Konkurrenten / Mitbewerber"));
+  // short answers
+  assert.equal(check("Gebäude", run(`withAlts("Haus|Gebäude")`)).verdict, "right");
+});
+
+test("„Zählt doch“: ein Wort aus der Antwort wird als Synonym auf der Karte gespeichert", async () => {
+  const card = { i: "s1", f: "Was ist operative Effizienz?", b: "Ähnliche Tätigkeiten besser als *Konkurrenten* ausführen, *Best Practices* kopieren.", c: 0, x: false, sf: null, sr: null };
+  run(`state.decks = [{ id: "syn", name: "S", dir: "f", mode: "type", newPerDay: 5, retention: 0.9, newDay: "", newCount: 0, revDay: "", revCount: 0, chunks: 1, cardCount: 1 }];
+    state.cards = { syn: [${JSON.stringify(card)}] }; state.session = null;`);
+  await run(`startStudy("syn")`);
+  run(`submitTyped("Dinge besser machen als die Mitbewerber, Best Practices nachmachen")`);
+  assert.deepEqual(get(`state.session.answer.missing.map(k => k.label)`), ["Konkurrenten"]);
+  run(`state.session.kwPick = 0`);
+  const html = get(`studyHTML()`);
+  assert.match(html, /data-act="kw-accept" data-w="Mitbewerber"/);
+  assert.doesNotMatch(html, /data-w="Best"/, "Wörter, die schon zählen, stehen nicht zur Wahl");
+  run(`acceptSynonym("Mitbewerber")`);
+  assert.equal(get(`state.cards.syn[0].b`), "Ähnliche Tätigkeiten besser als *Konkurrenten|Mitbewerber* ausführen, *Best Practices* kopieren.");
+  assert.equal(get(`state.session.answer.verdict`), "right");
+  assert.equal(get(`state.session.answer.suggest`), 3);
+  assert.equal(get(`state.session.kwPick`), null);
+  run(`exitStudy()`);
+});
+
+test("„Zählt doch“ bei automatisch gewählten Begriffen: Synonym direkt hinter dem Wort", async () => {
+  const back = "Operative Effizienz bedeutet, ähnliche Tätigkeiten besser als Konkurrenten auszuführen (Best Practices kopieren, führt zu Konvergenz).";
+  run(`state.cards = { syn: [${JSON.stringify({ i: "s2", f: "Operative Effizienz?", b: back, c: 0, x: false, sf: null, sr: null })}] }; state.session = null;`);
+  await run(`startStudy("syn")`);
+  run(`submitTyped("Tätigkeiten besser machen als die Mitbewerber")`);
+  const i = get(`state.session.answer.missing.findIndex(k => k.label === "Konkurrenten")`);
+  assert.ok(i >= 0);
+  run(`state.session.kwPick = ${i}; acceptSynonym("Mitbewerber")`);
+  assert.match(get(`state.cards.syn[0].b`), /besser als Konkurrenten\|Mitbewerber auszuführen/);
+  assert.ok(get(`state.session.answer.found.map(k => k.label)`).includes("Konkurrenten / Mitbewerber"));
+  assert.equal(get(`plain(state.cards.syn[0].b)`), back);
+  run(`exitStudy()`);
+});

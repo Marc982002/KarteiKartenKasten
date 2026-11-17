@@ -44,6 +44,9 @@ RÜCKSEITE
   Markiert werden nur Begriffe, die in einer guten Antwort unbedingt vorkommen müssen.
 - Steht ein Fachbegriff auf Englisch, schreib die deutsche Übersetzung direkt dahinter in Klammern:
   **Scope** (Reichweite). Beides gilt dann als richtig.
+- Gibt es für einen markierten Begriff ein gängiges Synonym, das in einer Antwort genauso richtig wäre,
+  schreib es mit senkrechtem Strich in die Sternchen: **Konkurrenten|Mitbewerber**. Höchstens 2 Synonyme,
+  nur echte Synonyme, keine Oberbegriffe.
 - Sonst keine Klammern. Beispiele leitest du mit "z. B." ein, Quellen mit "vgl.".
 - Ist die Antwort nur ein Begriff oder eine Zahl (bis etwa 60 Zeichen), dann ohne Sternchen.
   Kommas nur, wenn mehrere Antworten gleich richtig sind ("Haus, Gebäude").
@@ -71,6 +74,7 @@ Beispiel für eine Zeile in Block 1:
 - **Name mit Doppelpunkt vorne:** Die App ordnet jede Karte dem Zweig im Themenbaum zu, dessen Begriffe sie am stärksten erwähnt. Der Teil vor dem Doppelpunkt zählt dabei doppelt.
 - **Markierte Fachbegriffe:** Sind Begriffe markiert, zählt die App nur diese. Ohne Markierung sucht sie bis zu 7 Begriffe selbst heraus, und das trifft nicht immer die richtigen.
 - **Übersetzung in Klammern:** Steht hinter einem markierten Begriff eine Klammer, gilt ihr Inhalt als gleichwertige Antwort. Deshalb sollen andere Klammern fehlen.
+- **Synonyme mit Strich:** `**Konkurrenten|Mitbewerber**` zeigt beim Lernen nur „Konkurrenten“, beim Prüfen zählt beides. Weitere Synonyme kannst du beim Lernen selbst ergänzen: Tipp auf einen roten Begriff.
 - **Kommas in kurzen Antworten:** Bei kurzen Antworten liest die App Komma, Semikolon, Schrägstrich und „oder“ als „eins davon reicht“.
 - **Ein Gedanke pro Karte:** Lange Karten werden schnell zu Problemkarten, die man immer wieder vergisst.
 - **Anführungszeichen in der CSV:** So bleibt ein Semikolon in einer Antwort Teil des Textes.
