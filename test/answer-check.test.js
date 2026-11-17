@@ -90,3 +90,22 @@ test("Wortendungen und kleine Tippfehler in langen Antworten werden toleriert", 
   assert.equal(run(`wordHit("strategie", ["stratgie"])`), true);
   assert.equal(run(`wordHit("rom", ["rim"])`), false);
 });
+
+test("andere Wortformen zählen: Verbformen, Partizip mit ge-, Ableitungen, unregelmäßige Verben", () => {
+  const hit = (kw, w) => run(`wordHit(${JSON.stringify(kw)}, [${JSON.stringify(w)}])`);
+  assert.equal(hit("combined", "combining"), true);
+  assert.equal(hit("handeln", "gehandelt"), true);
+  assert.equal(hit("organisation", "organisatorisch"), true);
+  assert.equal(hit("buy", "bought"), true);
+  assert.equal(hit("skalieren", "skaliert"), true);
+  // Different words stay different.
+  assert.equal(hit("position", "positiv"), false);
+  assert.equal(hit("strategie", "strategisch"), false);
+  assert.equal(hit("buy", "bug"), false);
+});
+
+test("zusammengesetzte Begriffe zählen auch, wenn beide Teile getrennt vorkommen", () => {
+  const r = keywords("Es gibt keinen Vorteil im Wettbewerb", "IT bietet keinen nachhaltigen *Wettbewerbsvorteil*");
+  assert.deepEqual(labels(r.found), ["Wettbewerbsvorteil"]);
+  assert.equal(keywords("ein Wettbewerbsnachteil", "*Wettbewerbsvorteil*").found.length, 0);
+});

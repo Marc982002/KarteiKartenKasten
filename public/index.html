@@ -1581,7 +1581,33 @@ function keywordsOf(answer) {
   const list = units.length > 7 ? units.slice().sort((a, b) => b.score - a.score).slice(0, 7).sort((a, b) => a.i - b.i) : units;
   return { marked: false, list };
 }
-// One key word counts as found despite endings (chemisch/chemischen), compounds (Sonnenlichtenergie) or a small typo.
+/* Word forms: a rough stem, so that "combining" counts as "combined", "gehandelt" as "Handeln"
+   and "organisatorisch" as "Organisation". Works on lower-case words without accents (see kn). */
+const IRREGULAR = Object.fromEntries(("bought:buy brought:bring thought:think built:build made:make sold:sell taught:teach won:win "
+  + "chose:choose chosen:choose led:lead ran:run began:begin begun:begin grew:grow grown:grow gave:give given:give took:take taken:take "
+  + "went:go gone:go kept:keep held:hold found:find meant:mean paid:pay spent:spend sought:seek drove:drive driven:drive rose:rise "
+  + "risen:rise fell:fall fallen:fall became:become knew:know known:know saw:see seen:see wrote:write written:write got:get gotten:get "
+  + "lost:lose felt:feel left:leave met:meet sent:send told:tell understood:understand fought:fight forgot:forget forgotten:forget "
+  + "shown:show better:good best:good worse:bad worst:bad").split(" ").map(p => p.split(":")));
+// Derivations (-isch, -ion, -or …) and inflections (-en, -ed, -ing …), longer ones first; stripped at most twice, and a stem keeps 5 letters.
+const SUFFIXES = ["ungen", "ieren", "iert", "isch", "lich", "keit", "heit", "itat", "ung", "ion", "ing", "ies", "ers", "ern", "end",
+  "est", "or", "en", "er", "em", "es", "ed", "et", "st", "ly", "e", "s", "n", "t"];
+// Returns the word after one and after two strips (both count, so "organisation" and "organisatorisch" meet at "organisat").
+function stems(w) {
+  w = IRREGULAR[w] || w;
+  const out = [];
+  for (let pass = 0; pass < 2; pass++) {
+    const suf = SUFFIXES.find(s => w.endsWith(s) && w.length - s.length >= 5);
+    if (!suf) break;
+    w = w.slice(0, -suf.length); out.push(w);
+  }
+  return out.length ? out : [w];
+}
+// German participles: "gehandelt" -> "handelt". Kept as extra stems, because many words just start with "ge" (Geschäft, generieren).
+const stemsOf = w => w.length >= 7 && w.startsWith("ge") ? [...stems(w), ...stems(w.slice(2))] : stems(w);
+const sameStem = (a, b) => { const sb = stemsOf(b); return stemsOf(a).some(x => sb.includes(x)); };
+// One key word counts as found despite endings (chemisch/chemischen), other word forms (combining/combined),
+// compounds (Sonnenlichtenergie, "Vorteil im Wettbewerb" for Wettbewerbsvorteil) or a small typo.
 function wordHit(kw, tokens) {
   const num = /\d/.test(kw);
   for (const t of tokens) {
@@ -1591,6 +1617,17 @@ function wordHit(kw, tokens) {
     if (kw.length >= 5 && t.length > kw.length && t.includes(kw)) return true;
     const tol = kw.length >= 9 ? 2 : kw.length >= 5 ? 1 : 0;
     if (tol && lev(t, kw) <= tol) return true;
+    if (t.length >= 3 && kw.length >= 3 && sameStem(t, kw)) return true;
+  }
+  return !num && compoundHit(kw, tokens);
+}
+// A compound key word whose two parts both appear as separate words, in any order ("Fugen-s" allowed).
+function compoundHit(kw, tokens) {
+  if (kw.length < 10 || kw.includes("-")) return false;
+  const has = part => tokens.some(t => t === part || (part.length >= 4 && t.length >= 4 && sameStem(t, part)));
+  for (let i = 4; i <= kw.length - 4; i++) {
+    const a = kw.slice(0, i), b = kw.slice(i);
+    if ((has(a) || (a.endsWith("s") && a.length >= 5 && has(a.slice(0, -1)))) && has(b)) return true;
   }
   return false;
 }
