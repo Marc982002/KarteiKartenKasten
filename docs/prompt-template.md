@@ -44,6 +44,9 @@ BACK
   Only mark terms that a good answer must contain.
 - If a key term is in another language than the card, put the translation in brackets right after it:
   **Reichweite** (scope). Both then count as correct.
+- If a marked term has a common synonym that would be just as correct in an answer,
+  add it inside the asterisks with a vertical bar: **competitors|rivals**. At most 2 synonyms,
+  only real synonyms, no broader terms.
 - No other brackets. Introduce examples with "e.g." and sources with "cf.".
 - If the answer is just a term or a number (up to about 60 characters), no asterisks.
   Commas only if several answers are equally correct ("house, building").
@@ -71,6 +74,7 @@ Example of a line in block 1:
 - **Name with a colon first:** the app assigns each card to the branch of the subject tree whose terms it mentions most. The part before the colon counts double.
 - **Marked key terms:** if terms are marked, the app only counts those. Without marks it picks up to 7 terms itself, and those aren't always the right ones.
 - **Translation in brackets:** a bracket right after a marked term counts as an equally valid answer. That's why other brackets should be left out.
+- **Synonyms with a bar:** `**competitors|rivals**` only shows "competitors" while studying, the check accepts both. You can add more synonyms yourself while studying: tap a red term.
 - **Commas in short answers:** for short answers the app reads comma, semicolon, slash and "or" as "one of these is enough".
 - **One idea per card:** long cards quickly become problem cards that you keep forgetting.
 - **Quotes in the CSV:** this way a semicolon in an answer stays part of the text.

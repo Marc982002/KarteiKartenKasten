@@ -51,7 +51,13 @@ Photosynthesis;Conversion of *light energy* into **chemical energy**
 
 If a term is followed by a translation in brackets, either one is enough: with `Scope (Reichweite)`, "Scope" counts just like "Reichweite". Brackets holding sources or examples ("vgl. …", "e.g. …", "such as …") are ignored.
 
-The check only looks for the terms, not the meaning. The app does not recognise synonyms, so its rating is always just a suggestion.
+Other word forms count too: "combining" for "combined", "bought" for "buy", "gehandelt" for "Handeln". A compound term also counts when both parts appear separately ("Vorteil im Wettbewerb" for "Wettbewerbsvorteil").
+
+Write **synonyms** with a vertical bar right after the term: `*competitors|rivals*`. While studying you only see "competitors", the check accepts both. Inside marked terms a synonym can be several words (`**where to play|where to compete**`), otherwise it is a single word (`competitors|rivals`). The bar works for short answers too.
+
+**"I meant that":** if a term you meant is marked as missing, tap the red term after checking and pick the matching word from your answer. The app writes it onto the card as a synonym and the rating updates right away. You can remove it under "Edit card".
+
+The check still only looks for the terms, not the meaning, so its rating is always just a suggestion.
 
 ## More new cards than the daily limit
 
@@ -101,7 +107,7 @@ Create a subject with **"New subject"**. Change which subject a set belongs to u
 - **Daily summary** on the overview: new cards started, learned, and moved up a stage.
 - **Your progress on this card:** when revealing, the app shows your earlier ratings of this card, a comparison with your last answer ("Last time 3 of 7 terms, today 6 of 7") and, expandable, your last answer.
 
-For every answer the app stores in its history (`log-<date>`): card, direction, rating, time, set, plus the typed text, the terms found and missing, the app's suggestion, the question type and how long the answer took. This is the basis for later improvements such as learned synonyms or personal thresholds.
+For every answer the app stores in its history (`log-<date>`): card, direction, rating, time, set, plus the typed text, the terms found and missing, the app's suggestion, the question type and how long the answer took. This is the basis for later improvements such as personal thresholds.
 - **16 badges** for regular practice and milestones, e.g. streaks, total answers, "All done" or the first card in box 5.
 
 Only what matters is rewarded: regular practice and long-term retention. There are no points for "correct" ratings, because that would tempt you to rate cards better than they went. The algorithm would then plan intervals that are too long.

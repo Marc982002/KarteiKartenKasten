@@ -2791,7 +2791,7 @@ function listCards(deck) {
 function cardFormHTML(prefix, f, b, extra, save, saveAttrs) {
   return `
     <label class="field">${T("Vorderseite")}<textarea class="ce-input" id="${prefix}-f" rows="2">${esc(f)}</textarea></label>
-    <label class="field">${T("Rückseite")}<textarea class="ce-input" id="${prefix}-b" rows="3">${esc(b)}</textarea><span class="hint">${T("Mit *Sternchen* markierst du Schlüsselbegriffe.")}</span></label>
+    <label class="field">${T("Rückseite")}<textarea class="ce-input" id="${prefix}-b" rows="3">${esc(b)}</textarea><span class="hint">${T("Mit *Sternchen* markierst du Schlüsselbegriffe, mit | ein Synonym: *Konkurrenten|Mitbewerber*.")}</span></label>
     ${extra}
     <div class="row-actions">
       <button class="btn primary sm" data-act="${save}" ${saveAttrs}>${T("Speichern")}</button>
@@ -3842,7 +3842,7 @@ var EN = {
   "Endgültig löschen": "Delete permanently", "Stapel löschen": "Delete deck", "Stapel gelöscht.": "Deck deleted.",
 
   // Card list
-  "Vorderseite": "Front", "Rückseite": "Back", "Mit *Sternchen* markierst du Schlüsselbegriffe.": "Mark key terms with *asterisks*.",
+  "Vorderseite": "Front", "Rückseite": "Back", "Mit *Sternchen* markierst du Schlüsselbegriffe, mit | ein Synonym: *Konkurrenten|Mitbewerber*.": "Mark key terms with *asterisks*, add a synonym with |: *competitors|rivals*.",
   "Keine Karte gefunden.": "No card found.",
   "Keine Problemkarten. Als Problemkarte gilt eine Karte, die du {n}-mal oder öfter vergessen hast.": "No problem cards. A problem card is one you have forgotten {n} times or more.",
   "Keine Karte ausgesetzt.": "No suspended cards.", "Keine Karten.": "No cards.",

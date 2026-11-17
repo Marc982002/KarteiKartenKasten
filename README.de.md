@@ -49,7 +49,13 @@ Photosynthese;Umwandlung von *Lichtenergie* in **chemische Energie**
 
 Steht hinter einem Begriff eine Übersetzung in Klammern, reicht eins von beiden: Bei `Scope (Reichweite)` zählt „Scope“ genauso wie „Reichweite“. Klammern mit Quellen oder Beispielen („vgl. …“, „z. B. …“, „wie …“) werden ignoriert.
 
-Geprüft wird nur, ob die Begriffe vorkommen, nicht der Sinn. Synonyme erkennt die App nicht. Die Bewertung ist deshalb immer nur ein Vorschlag.
+Andere Wortformen zählen mit: „combining“ für „combined“, „bought“ für „buy“, „gehandelt“ für „Handeln“, „organisatorisch“ für „Organisation“. Ein zusammengesetzter Begriff zählt auch, wenn beide Teile getrennt vorkommen („Vorteil im Wettbewerb“ für „Wettbewerbsvorteil“).
+
+**Synonyme** schreibst du mit einem senkrechten Strich direkt an den Begriff: `*Konkurrenten|Mitbewerber*`. Beim Lernen siehst du nur „Konkurrenten“, beim Prüfen zählt beides. In markierten Begriffen darf ein Synonym aus mehreren Wörtern bestehen (`**where to play|where to compete**`), sonst ist es ein einzelnes Wort (`Konkurrenten|Mitbewerber`). Bei kurzen Antworten funktioniert der Strich genauso.
+
+**„Zählt doch“:** Fehlt ein Begriff, den du gemeint hast, tippst du nach dem Prüfen auf den roten Begriff und wählst das passende Wort aus deiner Antwort. Die App schreibt es als Synonym auf die Karte, und die Bewertung passt sich sofort an. Wieder entfernen kannst du es unter „Karte bearbeiten“.
+
+Geprüft wird trotzdem nur, ob die Begriffe vorkommen, nicht der Sinn. Die Bewertung ist deshalb immer nur ein Vorschlag.
 
 ## Mehr neue Karten als das Tageslimit
 
@@ -99,7 +105,7 @@ Ein Thema legst du über **„Neues Thema“** an. Die Zuordnung änderst du unt
 - **Tagesbilanz** auf der Übersicht: neue Karten angefangen, gelernt und eine Stufe weiter.
 - **Deine Entwicklung:** Beim Aufdecken zeigt die App deine bisherigen Bewertungen zu dieser Karte, den Vergleich mit der letzten Antwort („Letztes Mal 3 von 7 Begriffen, heute 6 von 7“) und aufklappbar deine letzte Antwort.
 
-Pro Antwort speichert die App im Verlauf (`log-<Datum>`): Karte, Richtung, Bewertung, Zeitpunkt, Set und zusätzlich den getippten Text, gefundene und fehlende Begriffe, den Vorschlag der App, die Abfrageart und die Antwortdauer. Das ist die Grundlage für spätere Verbesserungen wie gelernte Synonyme oder persönliche Schwellen.
+Pro Antwort speichert die App im Verlauf (`log-<Datum>`): Karte, Richtung, Bewertung, Zeitpunkt, Set und zusätzlich den getippten Text, gefundene und fehlende Begriffe, den Vorschlag der App, die Abfrageart und die Antwortdauer. Das ist die Grundlage für spätere Verbesserungen wie persönliche Schwellen.
 - **16 Abzeichen** für Regelmäßigkeit und Meilensteine, z. B. Serien, Antworten insgesamt, „Alles erledigt“ oder die erste Karte in Fach 5.
 
 Belohnt wird nur, was wirklich zählt: regelmäßiges Lernen und langfristiges Behalten. Es gibt keine Punkte für „richtige“ Bewertungen, weil das dazu verleiten würde, Karten besser zu bewerten, als sie liefen. Der Algorithmus würde dann zu lange Abstände planen.

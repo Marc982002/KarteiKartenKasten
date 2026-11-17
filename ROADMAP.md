@@ -22,7 +22,7 @@ Vergleich mit der Konkurrenz (Web-Recherche vom 10.11.2026, Anbieterangaben, nic
 | | Karteikasten | Anki | Quizlet | RemNote |
 |---|---|---|---|---|
 | Lange Antworten eintippen und prüfen lassen | ✅ Schlüsselbegriffe, grün/rot | ❌ nur selbst bewerten (KI über Zusatzprogramme) | ✅ KI nach Sinn, nur im Abo | ✅ KI nach Sinn, kostet KI-Guthaben |
-| Prüfung versteht Synonyme und Sinn | ❌ nur Begriffe | – | ✅ | ✅ |
+| Prüfung versteht Synonyme und Sinn | ⚠️ Synonyme ja (selbst gepflegt), Sinn nein | – | ✅ | ✅ |
 | Bewertung nachprüfbar (welche Begriffe fehlten) | ✅ | – | ❌ KI-Urteil | ❌ KI-Urteil |
 | Prüfung kostenlos und ohne Internet | ✅ | – | ❌ | ❌ |
 | Schwächstes Kapitel erkennen | ✅ eigene Vorlesungsgliederung | ⚠️ über Zusatzprogramme | ❌ | ✅ Lernstand pro Thema |
@@ -131,7 +131,7 @@ Nach Nutzen sortiert. „Voraussetzung“ heißt: Vorher nicht anfangen.
 | Idee | Nutzen | Voraussetzung | Stufe |
 |---|---|---|---|
 | ~~**Prompt-Vorlage:**~~ Folien rein, fertige CSV mit markierten Fachbegriffen raus | Karten erstellen geht schneller, Antwortprüfung wird genauer | erledigt (14.11.2026): [docs/prompt-vorlage.md](docs/prompt-vorlage.md). Bewährt sich beim eigenen Lernen? | 1.0 |
-| **Antwortprüfung lernt Synonyme** aus deinen Korrekturen | Weniger falsche „Nochmal“-Vorschläge. Wichtigste Verbesserung am Kern, weil die Konkurrenz Sinn versteht | Einige hundert getippte Antworten im Verlauf | 1.0 |
+| ~~**Antwortprüfung lernt Synonyme**~~ aus deinen Korrekturen | Weniger falsche „Nochmal“-Vorschläge. Wichtigste Verbesserung am Kern, weil die Konkurrenz Sinn versteht | erledigt (17.11.2026): Wortformen, Synonyme mit `\|` auf der Karte, „Zählt doch“-Klick beim Lernen. Offen: Sinn verstehen (nur mit KI) | 1.0 |
 | **Klausurdatum:** Pro Thema ein Datum setzen, die App plant so, dass bis dahin alles einmal sitzt, und sagt „15 Min. pro Tag reichen“ | Beantwortet die Frage „schaffe ich das?“. Wird erwartet, RemNote hat es schon | Mehrere Wochen eigener Verlauf, damit die Zeitschätzung stimmt | 1.0 |
 | **Persönliche Schwellen** statt 60 %/30 % | Vorschläge passen besser zu dir | wie oben | 1.0 |
 | **FSRS auf dich einstellen** (Parameter aus deinem Verlauf berechnen) | Genauere Abstände, weniger Wiederholungen | Einige hundert Bewertungen über mehrere Wochen | 1.0 |
