@@ -26,7 +26,7 @@ Vergleich mit der Konkurrenz (Web-Recherche vom 10.11.2026, Anbieterangaben, nic
 | Bewertung nachprüfbar (welche Begriffe fehlten) | ✅ | – | ❌ KI-Urteil | ❌ KI-Urteil |
 | Prüfung kostenlos und ohne Internet | ✅ | – | ❌ | ❌ |
 | Schwächstes Kapitel erkennen | ✅ eigene Vorlesungsgliederung | ⚠️ über Zusatzprogramme | ❌ | ✅ Lernstand pro Thema |
-| Planung auf ein Klausurdatum | ❌ geplant | ⚠️ über Zusatzprogramme | ❌ | ✅ |
+| Planung auf ein Klausurdatum | ✅ pro Thema | ⚠️ über Zusatzprogramme | ❌ | ✅ |
 | Moderne Wiederholungsplanung (FSRS) | ✅ | ✅ | ❌ | ✅ |
 | Ehrliche Belohnung (nur Behalten zählt) | ✅ | – | ❌ Punkte, Streaks | – |
 | Daten bleiben bei mir, kostenlos | ✅ | ✅ | ❌ Konto, Abo | ❌ Konto, Abo für KI |
@@ -132,7 +132,7 @@ Nach Nutzen sortiert. „Voraussetzung“ heißt: Vorher nicht anfangen.
 |---|---|---|---|
 | ~~**Prompt-Vorlage:**~~ Folien rein, fertige CSV mit markierten Fachbegriffen raus | Karten erstellen geht schneller, Antwortprüfung wird genauer | erledigt (14.11.2026): [docs/prompt-vorlage.md](docs/prompt-vorlage.md). Bewährt sich beim eigenen Lernen? | 1.0 |
 | ~~**Antwortprüfung lernt Synonyme**~~ aus deinen Korrekturen | Weniger falsche „Nochmal“-Vorschläge. Wichtigste Verbesserung am Kern, weil die Konkurrenz Sinn versteht | erledigt (17.11.2026): Wortformen, Synonyme mit `\|` auf der Karte, „Zählt doch“-Klick beim Lernen. Offen: Sinn verstehen (nur mit KI) | 1.0 |
-| **Klausurdatum:** Pro Thema ein Datum setzen, die App plant so, dass bis dahin alles einmal sitzt, und sagt „15 Min. pro Tag reichen“ | Beantwortet die Frage „schaffe ich das?“. Wird erwartet, RemNote hat es schon | Mehrere Wochen eigener Verlauf, damit die Zeitschätzung stimmt | 1.0 |
+| ~~**Klausurdatum:**~~ Pro Thema ein Datum setzen, die App plant so, dass bis dahin alles einmal sitzt, und sagt „15 Min. pro Tag reichen“ | Beantwortet die Frage „schaffe ich das?“. Wird erwartet, RemNote hat es schon | erledigt (18.11.2026): Tempo für neue Karten, keine Wiederholung nach dem Termin, Minuten pro Tag. Offen: Zeitschätzung an mehreren Wochen Verlauf prüfen | 1.0 |
 | **Persönliche Schwellen** statt 60 %/30 % | Vorschläge passen besser zu dir | wie oben | 1.0 |
 | **FSRS auf dich einstellen** (Parameter aus deinem Verlauf berechnen) | Genauere Abstände, weniger Wiederholungen | Einige hundert Bewertungen über mehrere Wochen | 1.0 |
 | **Bilder und Formeln** in Karten | Fächer wie Statistik, BWL-Grafiken | Ein Fach, das es braucht. Bilder machen Datenbank und Sicherung größer | 1.5 |

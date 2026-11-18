@@ -99,6 +99,14 @@ Several card sets on one topic can be bundled into a **subject**, e.g. all sets 
 
 Create a subject with **"New subject"**. Change which subject a set belongs to under "Edit" on the subject, in a set's settings, or right when importing. Deleting a subject keeps its sets.
 
+**Exam date:** under "Edit" you can give a subject an exam date. Until then, three rules apply to its sets:
+
+- **New cards:** the app takes enough new cards per day that all are started before the review phase begins. That is the last fifth of the time, at least 2 and at most 7 days. Your daily limit stays the minimum. If it is 0, new cards stay off.
+- **No review after the exam:** a card that would come back on the exam day or later moves to one of the 3 days before it, spread out so not everything lands on the eve. The rating buttons already show the new date. How well the card sits (its FSRS stability) stays unchanged.
+- **Normal afterwards:** from the day after the exam the app plans as usual again.
+
+The subject shows the days left, the new cards needed per day and roughly how many minutes that takes daily. The minutes are estimated from your answer time and the reviews new cards bring for you. With little history the estimate is rough.
+
 ## Progress and badges
 
 - **Card box with boxes** (a deck's statistics): every card sits in one of five boxes, depending on how long it is expected to stick according to the algorithm (from under 1 day to over 3 months). Cards you know move up, forgotten ones fall back.
