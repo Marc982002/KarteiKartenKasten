@@ -158,6 +158,9 @@ textarea.ce-input{font:inherit;font-size:16px;min-height:0;line-height:1.45}
 .subject-link:hover{text-decoration:underline}
 .subject-progress{height:5px;max-width:260px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}
 .subject-progress i{display:block;height:100%;background:var(--fc)}
+.exam-line{margin-top:8px;max-width:60ch;color:var(--ink)}
+.exam-line.muted{color:var(--muted)}
+.exam-tag{color:var(--ink);font-weight:700}
 .subject-row.archived .subject-link{color:var(--muted)}
 .topic{border-top-color:var(--fc,var(--sketch))}
 .topic .topic-name{color:var(--fc,var(--accent))}
@@ -798,7 +801,11 @@ function recall(st, now) {
 // Intervals are computed once when the answer is shown, so the buttons show exactly what gets saved.
 function previewFor(s) {
   const k = ukey(s.current);
-  if (!s.preview || s.preview.key !== k) { const now = Date.now(); s.preview = { key: k, now, o: outcomes(ust(s.current), now, s.current.deck.retention || 0.9) }; }
+  if (!s.preview || s.preview.key !== k) {
+    const now = Date.now(), u = s.current, iso = examOf(u.deck);
+    const raw = outcomes(ust(u), now, u.deck.retention || 0.9), o = raw.map(st => examCap(st, iso, u.card.i, now));
+    s.preview = { key: k, now, o, capped: o.map((st, i) => st !== raw[i]) };
+  }
   return s.preview;
 }
 
@@ -1021,7 +1028,7 @@ const bonusToday = d => d.bonusDay === dayKey() ? d.bonus || 0 : 0;
 const topicById = id => state.topics.find(t => t.id === id);
 const decksOfTopic = id => state.decks.filter(d => d.topic === id);
 function saveTopics() {
-  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, outline: t.outline || null, pins: t.pins || {}, color: t.color ?? 0, archived: !!t.archived })) }));
+  queueWrite("t:topics", () => state.store.putDoc("topics", { kind: "topics", list: state.topics.map(t => ({ id: t.id, name: t.name, created: t.created, outline: t.outline || null, pins: t.pins || {}, color: t.color ?? 0, archived: !!t.archived, exam: validExam(t.exam) })) }));
 }
 /* ---------- Several subjects: colours, archive, tabs on the overview ---------- */
 const COLORS = 8;
@@ -1037,6 +1044,73 @@ const looseDecks = () => state.decks.filter(d => !d.topic || !topicById(d.topic)
 // Decks that count for "today": everything except subjects in the archive.
 const activeDecks = () => state.decks.filter(d => !topicById(d.topic)?.archived);
 const topicOfDeck = d => d && topicById(d.topic);
+
+/* ---------- Exam date: learning towards a fixed day ----------
+   A topic can have an exam date (t.exam, "YYYY-MM-DD"). Until the exam day is over, its decks follow extra rules:
+   1. No review lands on or after the exam day. A longer interval is cut to one of the last 3 days before it,
+      spread by card so not everything comes on the eve. Stability stays as FSRS computed it, so after the exam
+      the normal plan simply continues.
+   2. New cards: enough per day that every card has been started before the review-only phase, the last fifth
+      of the time (2 to 7 days). The deck's own limit stays the minimum; 0 (new cards off) is respected.
+   3. The day after the exam the topic is back to normal. */
+const EXAM = { lastDays: 3, reviewShare: 0.2, minReview: 2, maxReview: 7 };
+const validExam = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+// When the learning day "YYYY-MM-DD" starts.
+const dayStartOf = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).getTime() + dayStartMs(); };
+// The exam still ahead (or today) for a topic or a deck's topic, else null.
+const examOfTopic = t => { const iso = validExam(t?.exam); return iso && iso >= dayKey() ? iso : null; };
+const examOf = deck => examOfTopic(topicOfDeck(deck));
+function examPlan(iso, now = Date.now()) {
+  const start = dayStartOf(iso), today = dayEnd(now) - DAY;
+  const daysLeft = Math.max(0, Math.round((start - today) / DAY)); // learning days before the exam, today included
+  const review = Math.min(EXAM.maxReview, Math.max(EXAM.minReview, Math.round(daysLeft * EXAM.reviewShare)));
+  const newDays = daysLeft > review ? daysLeft - review : Math.max(1, daysLeft);
+  return { start, daysLeft, review, newDays };
+}
+// Moves a review that would come on or after the exam day to one of the last days before it.
+// Returns the state unchanged when there is no such day left after today (the card was just seen).
+function examCap(st, iso, cardId, now) {
+  if (!st || st.q !== 2 || !iso) return st;
+  const start = dayStartOf(iso);
+  if (st.due < start) return st;
+  const days = [];
+  for (let k = 1; k <= EXAM.lastDays; k++) if (start - k * DAY >= dayEnd(now)) days.push(start - k * DAY);
+  if (!days.length) return st;
+  let h = 0; for (const ch of String(cardId)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return { ...st, due: days[h % days.length] + 3600000 };
+}
+// Card directions in a deck that were never shown.
+const unstarted = deck => (state.cards[deck.id] || []).reduce((a, c) => a + (c.x ? 0 : dirsOf(deck).filter(d => !c["s" + d]).length), 0);
+// New cards allowed per day: the deck's own limit, raised before an exam so that everything gets started in time.
+function newLimit(deck) {
+  const own = deck.newPerDay ?? 20, iso = examOf(deck);
+  if (!iso || own <= 0) return own;
+  const left = unstarted(deck) + (deck.newDay === dayKey() ? deck.newCount || 0 : 0);
+  return Math.max(own, Math.min(500, Math.ceil(left / examPlan(iso).newDays)));
+}
+// What the topic page says about the exam: days left, pace and minutes per day.
+function examInfo(t) {
+  const iso = validExam(t?.exam); if (!iso) return null;
+  const when = new Date(dayStartOf(iso)).toLocaleDateString(LOCALE(), { weekday: "short", day: "numeric", month: "long" });
+  if (iso < dayKey()) return { past: true, when };
+  const decks = decksOfTopic(t.id), plan = examPlan(iso), open = decks.reduce((a, d) => a + unstarted(d), 0);
+  const perDay = decks.reduce((a, d) => a + (unstarted(d) ? newLimit(d) : 0), 0);
+  let started = 0;
+  for (const d of decks) for (const c of state.cards[d.id] || []) for (const dir of dirsOf(d)) if (!c.x && c["s" + dir]) started++;
+  // Per day: each new card with its learning steps and the reviews it brings, plus every started card once before the exam.
+  const answers = perDay * (3 + (perDay ? reviewsPerNewCard(decks) : 0)) + started / Math.max(1, plan.daysLeft);
+  const mins = answers ? Math.max(1, Math.round(answers * secondsPerAnswer() / 60)) : 0;
+  return { past: false, when, ...plan, open, perDay: open ? perDay : 0, mins };
+}
+function examHTML(t) {
+  const x = examInfo(t); if (!x) return "";
+  if (x.past) return `<p class="exam-line small muted">${T("Klausur war am {when}. Die Karten laufen wieder nach dem normalen Plan.", { when: x.when })}</p>`;
+  const head = x.daysLeft === 0 ? T("Klausur heute") : Tn(x.daysLeft, "Klausur am {when}, noch {n} Tag", "Klausur am {when}, noch {n} Tage", { when: x.when });
+  const pace = !x.open ? T("Alle Karten sind angefangen. Bis zur Klausur kommen nur noch Wiederholungen, die letzte kurz vor dem Termin.")
+    : x.daysLeft > x.review ? T("{n} neue Karten pro Tag, etwa {m} Min. täglich. Die letzten {r} Tage nur Wiederholung.", { n: x.perDay, m: x.mins, r: x.review })
+    : T("Endspurt: {n} neue Karten pro Tag, etwa {m} Min. täglich, damit bis zur Klausur alles einmal dran war.", { n: x.perDay, m: x.mins });
+  return `<p class="exam-line small"><b>${head}.</b> ${pace}</p>`;
+}
 // Which tab of the overview is open: "today", a topic id, "loose" or "archive". Remembered per browser.
 function homeTab() {
   const h = state.home;
@@ -1309,7 +1383,7 @@ function buildQueue(deck) {
     if (!card["s" + dirs[0]]) fresh.push({ card, dir: dirs[0], deck });
     else if (dirs.length > 1 && !card["s" + dirs[1]] && card["s" + dirs[0]].last < sod) fresh.push({ card, dir: dirs[1], deck });
   }
-  const newLeft = Math.max(0, (deck.newPerDay ?? 20) + bonusToday(deck) - (deck.newCount || 0));
+  const newLeft = Math.max(0, newLimit(deck) + bonusToday(deck) - (deck.newCount || 0));
   const newPick = fresh.slice(0, newLeft);
   rev.sort((a, b) => a.pri - b.pri);
   learn.sort((a, b) => ust(a).due - ust(b).due);
@@ -1777,10 +1851,10 @@ function todayNewStats(decks) {
 function extraOffer(decks) {
   if (quiet()) return null;
   const qs = decks.map(buildQueue);
-  const open = decks.filter((d, i) => (d.newPerDay ?? 20) > 0 && qs[i].unseen > 0);
+  const open = decks.filter((d, i) => newLimit(d) > 0 && qs[i].unseen > 0);
   if (!open.length || qs.some(q => q.nNew > 0)) return null; // today's regular new cards come first
   const st = todayNewStats(decks);
-  const room = open.reduce((a, d) => a + Math.max(0, (d.newPerDay ?? 20) - bonusToday(d)), 0);
+  const room = open.reduce((a, d) => a + Math.max(0, newLimit(d) - bonusToday(d)), 0);
   const unseen = open.reduce((a, d) => a + qs[decks.indexOf(d)].unseen, 0);
   if (!room) return { ok: false, reason: "double", ...st };
   if (st.hitRate != null && st.hitRate < EXTRA.minHitRate) return { ok: false, reason: "hard", ...st };
@@ -1825,7 +1899,7 @@ function groupKeyFor(decks) {
 function pickExtra(decks, n) {
   const s = state.session, taken = new Set();
   if (s) for (const u of [...s.main, ...s.learn, s.current].filter(Boolean)) taken.add(ukey(u));
-  const room = new Map(decks.map(d => [d.id, Math.max(0, (d.newPerDay ?? 20) - bonusToday(d))]));
+  const room = new Map(decks.map(d => [d.id, Math.max(0, newLimit(d) - bonusToday(d))]));
   const key = groupKeyFor(decks), groups = new Map();
   for (const d of decks) for (const u of buildQueue(d).allFresh) if (!taken.has(ukey(u))) {
     const k = key(u); (groups.get(k) || groups.set(k, []).get(k)).push(u);
@@ -1937,7 +2011,7 @@ function rate(g) {
   const from = fachOf(prev), to = fachOf(next);
   if (!s.startFach.has(k)) s.startFach.set(k, { u, from });
   s.lastMove = { from, to };
-  s.stamp = stampFor(prev, next, from, to, now);
+  s.stamp = stampFor(prev, next, from, to, now, previewFor(s).capped[g - 1]);
   // Today's summary on the overview.
   const today = dayKey(), dl = state.profile.daily[today] = { learned: 0, up: 0, ...(state.profile.daily[today] || {}) };
   if (next.q === 2 && (!prev || prev.q !== 2)) dl.learned++;
@@ -1964,9 +2038,10 @@ function undo() {
   render();
 }
 // What the last rating did to the card, in words: shown as a stamp above the next card.
-function stampFor(prev, next, from, to, now) {
+function stampFor(prev, next, from, to, now, capped = false) {
   const when = fmtDur(next.due - now);
   const day = new Date(next.due).toLocaleDateString(LOCALE(), { weekday: "short", day: "numeric", month: "short" });
+  if (capped) return { kind: "up", title: T("Vor der Klausur"), text: T("letzte Wiederholung vor der Klausur am {day}", { day }) };
   if (prev && prev.q === 2 && next.q === 3) return { kind: "again", title: T("Vergessen"), text: T("kommt in {when} nochmal", { when }) };
   if (next.q !== 2) return { kind: "learn", title: !prev ? T("Kennengelernt") : T("Noch üben"), text: !prev ? T("nochmal in {when}, danach gilt sie als gelernt", { when }) : T("nochmal in {when}", { when }) };
   if (!prev || prev.q !== 2) return { kind: "up", title: T("Gelernt ✓"), text: T("wieder in {when} ({day})", { when, day }) };
@@ -2313,7 +2388,7 @@ function overviewHTML() {
       <span class="subject-bar" aria-hidden="true"></span>
       <div class="subject-main">
         <button class="subject-link" data-act="home" data-id="${t ? t.id : "loose"}">${esc(t ? t.name : T("Ohne Thema"))}</button>
-        <p class="counts">${countsLine(d, n, decks.length, cards)}</p>
+        <p class="counts">${countsLine(d, n, decks.length, cards)}${(() => { const iso = examOfTopic(t); if (!iso) return ""; const left = examPlan(iso).daysLeft; return ` · <b class="exam-tag">${left ? Tn(left, "Klausur in {n} Tag", "Klausur in {n} Tagen") : T("Klausur heute")}</b>`; })()}</p>
         <div class="subject-progress" title="${T("{p} Fortschritt", { p: pctN(p.pct) })}"><i style="width:${p.pct}%"></i></div>
       </div>
       ${studyButtonHTML(decks, t ? `data-act="study-topic" data-id="${t.id}"` : 'data-act="study-loose"', T("Lernen"))}
@@ -2478,6 +2553,7 @@ function topicHTML(t) {
         <h3 class="topic-name">${esc(t.name)}${t.archived ? ` <span class="archived-tag">${T("im Archiv")}</span>` : ""}</h3>
         <p class="counts">${countsLine(due, fresh, decks.length, cards)}</p>
         ${masteryBar(progressOf(decks))}
+        ${examHTML(t)}
       </div>
       <div class="deck-actions">
         ${(() => {
@@ -2619,6 +2695,8 @@ function topicEditHTML() {
     <fieldset class="color-picks"><legend>${T("Farbe")}</legend>
       ${Array.from({ length: COLORS }, (_, i) => `<label class="swatch" style="--fc:var(--fach-${i})"><input type="radio" name="topic-color" value="${i}" ${(te.color ?? 0) === i ? "checked" : ""}><span class="sr">${T("Farbe {n}", { n: i + 1 })}</span></label>`).join("")}
     </fieldset>
+    <label class="field">${T("Klausurdatum (freiwillig)")}<input type="date" id="topic-exam" value="${esc(te.exam || "")}">
+      <span class="hint">${T("Bis zur Klausur plant die App so, dass jede Karte rechtzeitig drankommt: genug neue Karten pro Tag, die letzten Tage nur Wiederholung, und keine Karte wird erst nach dem Termin wieder abgefragt. Danach läuft alles normal weiter.")}</span></label>
     ${outlineEditorHTML(te)}
     <fieldset class="deck-picks"><legend>${T("Kartensets in diesem Thema")}</legend>
       ${state.decks.length ? state.decks.map(d => {
@@ -3270,7 +3348,7 @@ function doneHTML(s) {
   let tomorrow = 0;
   for (const deck of decks) for (const c of state.cards[deck.id] || []) for (const dir of dirsOf(deck)) { const st = c["s" + dir]; if (st && (isLearning(st) || st.due <= eod + DAY)) tomorrow++; }
   const qs = decks.map(buildQueue);
-  const newTomorrow = decks.reduce((a, d, i) => a + (qs[i].unseen + qs[i].nNew > 0 ? (d.newPerDay ?? 20) : 0), 0);
+  const newTomorrow = decks.reduce((a, d, i) => a + (qs[i].unseen + qs[i].nNew > 0 ? newLimit(d) : 0), 0);
   let up = 0, down = 0;
   for (const { u, from } of s.startFach.values()) { const to = fachOf(ust(u)); if (to > from) up++; else if (to < from) down++; }
   return `
@@ -3386,7 +3464,7 @@ document.addEventListener("click", e => {
   }
   else if (act === "extra-no") { if (state.session) { state.session.offerOff = true; render(); } }
   else if (act === "topic-new") { state.topicEdit = state.topicEdit && !state.topicEdit.id ? null : { id: null, name: "", outline: cloneOutline(null), deckIds: new Set(state.decks.filter(d => !d.topic || !topicById(d.topic)).map(d => d.id)), confirmDelete: false, color: nextColor() }; render(); $("#topic-name")?.focus(); }
-  else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, outline: cloneOutline(t.outline), deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false, color: t.color ?? 0 }; render(); }
+  else if (act === "topic-edit") { const t = topicById(id); state.topicEdit = state.topicEdit?.id === id ? null : { id, name: t.name, outline: cloneOutline(t.outline), deckIds: new Set(decksOfTopic(id).map(d => d.id)), confirmDelete: false, color: t.color ?? 0, exam: validExam(t.exam) || "" }; render(); }
   else if (act?.startsWith("ol-") && state.topicEdit) {
     const te = state.topicEdit, nid = b.dataset.nid;
     if (act === "ol-add") outlineOp("add");
@@ -3427,6 +3505,7 @@ document.addEventListener("click", e => {
     let t = te.id && topicById(te.id);
     if (t) t.name = name; else { t = { id: rid(), name, created: Date.now() }; state.topics.push(t); setHome(t.id); }
     t.color = te.color ?? t.color ?? nextColor();
+    t.exam = validExam(te.exam);
     t.outline = cleanOutline(te.outline); delete t.tree;
     if (t.outline) state.treeOpen = t.id;
     for (const d of state.decks) {
@@ -3553,6 +3632,7 @@ document.addEventListener("input", e => {
   const t = e.target;
   if (t.id === "imp-name" && state.draft) state.draft.name = t.value;
   if (t.id === "topic-name" && state.topicEdit) state.topicEdit.name = t.value;
+  if (t.id === "topic-exam" && state.topicEdit) state.topicEdit.exam = t.value;
   if (t.id === "topic-tree" && state.topicEdit) { state.topicEdit.pasteText = t.value; const pv = $("#tree-preview"); if (pv) pv.textContent = treePreviewText(t.value); }
   if (t.id === "ol-title" && state.topicEdit) state.topicEdit.outline.title = t.value;
   if (t.classList?.contains("ol-input") && state.topicEdit) {
@@ -3804,6 +3884,18 @@ var EN = {
   "Thema löschen": "Delete subject", "Behalten": "Keep",
   "Thema gelöscht. Die Kartensets sind jetzt unter „Ohne Thema“.": "Subject deleted. Its card sets are now under “No subject”.",
   "Gib dem Thema einen Namen.": "Give the subject a name.", "Thema gespeichert.": "Subject saved.",
+  // Exam date
+  "Klausurdatum (freiwillig)": "Exam date (optional)",
+  "Bis zur Klausur plant die App so, dass jede Karte rechtzeitig drankommt: genug neue Karten pro Tag, die letzten Tage nur Wiederholung, und keine Karte wird erst nach dem Termin wieder abgefragt. Danach läuft alles normal weiter.": "Until the exam, the app plans so every card comes up in time: enough new cards per day, only reviews in the last days, and no card is pushed past the exam. Afterwards everything continues as normal.",
+  "Klausur war am {when}. Die Karten laufen wieder nach dem normalen Plan.": "The exam was on {when}. The cards are back on the normal plan.",
+  "Klausur heute": "Exam today",
+  "Klausur am {when}, noch {n} Tag": "Exam on {when}, {n} day left", "Klausur am {when}, noch {n} Tage": "Exam on {when}, {n} days left",
+  "Klausur in {n} Tag": "Exam in {n} day", "Klausur in {n} Tagen": "Exam in {n} days",
+  "Alle Karten sind angefangen. Bis zur Klausur kommen nur noch Wiederholungen, die letzte kurz vor dem Termin.": "All cards are started. Until the exam only reviews come, the last one shortly before the date.",
+  "{n} neue Karten pro Tag, etwa {m} Min. täglich. Die letzten {r} Tage nur Wiederholung.": "{n} new cards per day, about {m} min daily. The last {r} days are reviews only.",
+  "Endspurt: {n} neue Karten pro Tag, etwa {m} Min. täglich, damit bis zur Klausur alles einmal dran war.": "Final stretch: {n} new cards per day, about {m} min daily, so everything comes up once before the exam.",
+  "Vor der Klausur": "Before the exam",
+  "letzte Wiederholung vor der Klausur am {day}": "last review before the exam on {day}",
   "Thema „{name}“ angelegt.": "Subject “{name}” created.",
 
   // Progress, boxes, badges

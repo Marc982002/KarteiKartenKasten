@@ -97,6 +97,14 @@ Mehrere Kartensets zu einem Fach lassen sich zu einem **Thema** bündeln, z. B. 
 
 Ein Thema legst du über **„Neues Thema“** an. Die Zuordnung änderst du unter „Bearbeiten“ am Thema, in den Einstellungen eines Sets oder schon beim Import. Wird ein Thema gelöscht, bleiben seine Sets erhalten.
 
+**Klausurdatum:** Unter „Bearbeiten“ kannst du einem Thema ein Klausurdatum geben. Bis dahin gelten für seine Sets drei Regeln:
+
+- **Neue Karten:** Die App nimmt so viele neue Karten pro Tag, dass alle angefangen sind, bevor die Wiederholungsphase beginnt. Das ist das letzte Fünftel der Zeit, mindestens 2 und höchstens 7 Tage. Dein Tageslimit bleibt die Untergrenze. Steht es auf 0, bleibt es aus.
+- **Keine Wiederholung nach der Klausur:** Würde eine Karte erst am Klausurtag oder später wiederkommen, rückt sie auf einen der letzten 3 Tage davor, verteilt, damit nicht alles am Vorabend kommt. Die Knöpfe beim Bewerten zeigen gleich den neuen Termin. Wie gut die Karte sitzt (die Stabilität aus FSRS), bleibt unverändert.
+- **Danach normal:** Ab dem Tag nach der Klausur plant die App wieder wie sonst.
+
+Am Thema steht, wie viele Tage bleiben, wie viele neue Karten pro Tag nötig sind und wie viele Minuten das etwa täglich kostet. Die Minuten schätzt die App aus deiner Antwortzeit und den Wiederholungen, die neue Karten bei dir mitbringen. Mit wenig Verlauf ist das grob.
+
 ## Fortschritt und Abzeichen
 
 - **Karteikasten mit Fächern** (Statistik eines Stapels): Jede Karte liegt in einem von fünf Fächern, je nachdem, wie lange sie laut Algorithmus sicher sitzt (unter 1 Tag bis über 3 Monate). Gewusste Karten rücken weiter, vergessene fallen zurück.
